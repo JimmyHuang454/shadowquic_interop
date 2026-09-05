@@ -82,6 +82,36 @@
             </table>
           </div>
 
+          <section class="udp-section" aria-labelledby="udp-title">
+            <div class="matrix-heading">
+              <div>
+                <p class="axis-label">UDP RELAY</p>
+                <h2 id="udp-title">UDP compatibility and throughput</h2>
+              </div>
+              <div class="legend" aria-label="UDP cell legend">
+                <span>Passing cells show upload / download throughput in
+                  MB/s over the echo window</span>
+                <span>Click a cell for the full probe report</span>
+              </div>
+            </div>
+
+            <h3 class="udp-mode-title" id="udp-stream-title">UDP over stream</h3>
+            <div class="table-scroll">
+              <table class="rate-table" aria-labelledby="udp-stream-title">
+                <thead><tr id="udp-stream-head"></tr></thead>
+                <tbody id="udp-stream-body"></tbody>
+              </table>
+            </div>
+
+            <h3 class="udp-mode-title" id="udp-datagram-title">UDP over datagram</h3>
+            <div class="table-scroll">
+              <table class="rate-table" aria-labelledby="udp-datagram-title">
+                <thead><tr id="udp-datagram-head"></tr></thead>
+                <tbody id="udp-datagram-body"></tbody>
+              </table>
+            </div>
+          </section>
+
           <div class="run-meta">
             <div>
               <span>Target</span>

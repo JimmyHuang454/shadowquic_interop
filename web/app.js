@@ -78,6 +78,7 @@
     const servers = unique(run.results.map((item) => item.server));
     const cells = new Map(run.results.map((item) => [`${item.client}:${item.server}`, item]));
     renderMatrix(clients, servers, cells, implementations, protocol);
+    renderUdpTables(clients, servers, cells, implementations);
     renderSummary(run.results, protocol);
     renderImplementations(run.implementations);
   }
@@ -156,6 +157,106 @@
       badges.append(badge);
     }
     button.append(symbol, label, badges);
+    button.addEventListener("click", () => showDetails(cell, implementations, protocol));
+    return button;
+  }
+
+  function renderUdpTables(clients, servers, cells, implementations) {
+    for (const mode of ["stream", "datagram"]) {
+      const protocol = mode === "stream" ? "udp-over-stream" : "udp-over-datagram";
+      const head = document.getElementById(`udp-${mode}-head`);
+      const body = document.getElementById(`udp-${mode}-body`);
+      head.replaceChildren();
+      body.replaceChildren();
+
+      const corner = document.createElement("th");
+      corner.className = "corner-label";
+      corner.scope = "col";
+      corner.textContent = "Client implementation";
+      head.append(corner);
+      for (const server of servers) {
+        const th = document.createElement("th");
+        th.scope = "col";
+        th.textContent = implementations.get(server)?.name || server;
+        head.append(th);
+      }
+
+      for (const client of clients) {
+        const row = document.createElement("tr");
+        const label = document.createElement("th");
+        label.className = "row-label";
+        label.scope = "row";
+        label.textContent = implementations.get(client)?.name || client;
+        const axis = document.createElement("span");
+        axis.textContent = "CLIENT";
+        label.append(axis);
+        row.append(label);
+        for (const server of servers) {
+          const cell = cells.get(`${client}:${server}`);
+          const probe = cell?.probes.find((item) => item.protocol === protocol);
+          const td = document.createElement("td");
+          if (!probe) {
+            td.className = "udp-na";
+            td.title = "This run did not include this UDP probe";
+            td.append("—");
+          } else {
+            td.append(createUdpCellButton(cell, probe, implementations, protocol));
+          }
+          row.append(td);
+        }
+        body.append(row);
+      }
+    }
+  }
+
+  function createUdpCellButton(cell, probe, implementations, protocol) {
+    const view = statusView[probe.status] || statusView.error;
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = `cell-button rate-cell ${probe.status}`;
+    button.title = `${view.label}: open details`;
+
+    if (probe.status === "pass") {
+      const metrics = probe.metrics || {};
+      if (metrics.sent_bytes != null && metrics.window_ms) {
+        const up = rateMBs(metrics.sent_bytes, metrics.window_ms);
+        const down = probe.duration_ms
+          ? rateMBs(metrics.recv_bytes, probe.duration_ms)
+          : "0.00";
+        const upLine = document.createElement("span");
+        upLine.className = "rate-line up";
+        upLine.textContent = `\u2191 ${up}`;
+        const downLine = document.createElement("span");
+        downLine.className = "rate-line down";
+        downLine.textContent = `\u2193 ${down}`;
+        const unit = document.createElement("span");
+        unit.className = "rate-unit";
+        unit.textContent = "MB/s";
+        button.append(upLine, downLine, unit);
+        button.setAttribute(
+          "aria-label",
+          `${implementations.get(cell.client)?.name || cell.client} client to ${
+            implementations.get(cell.server)?.name || cell.server
+          } server, ${protocolNames[protocol]}: pass, upload ${up} MB/s, download ${down} MB/s`,
+        );
+      } else {
+        const symbol = document.createElement("span");
+        symbol.className = "symbol";
+        symbol.setAttribute("aria-hidden", "true");
+        symbol.textContent = view.symbol;
+        button.append(symbol);
+      }
+    } else {
+      const symbol = document.createElement("span");
+      symbol.className = "symbol";
+      symbol.setAttribute("aria-hidden", "true");
+      symbol.textContent = view.symbol;
+      const label = document.createElement("span");
+      label.className = "status-label";
+      label.textContent = view.label;
+      button.append(symbol, label);
+    }
+
     button.addEventListener("click", () => showDetails(cell, implementations, protocol));
     return button;
   }

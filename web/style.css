@@ -371,9 +371,7 @@ thead th {
 .run-meta span,
 .run-meta strong {
   display: block;
-}
-
-.run-meta span {
+}.run-meta span {
   margin-bottom: 4px;
   color: var(--muted);
   font-size: 10px;
@@ -556,6 +554,48 @@ footer .content-width {
   display: flex;
   justify-content: space-between;
   gap: 20px;
+}
+
+.udp-section {
+  margin-top: 8px;
+}
+
+.udp-mode-title {
+  margin: 26px 0 10px;
+  font-size: 15px;
+}
+
+.rate-table th,
+.rate-table td {
+  height: auto;
+}
+
+.rate-cell {
+  min-height: 62px;
+  padding: 8px 6px;
+}
+
+.rate-cell .rate-line {
+  display: block;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 13px;
+  font-weight: 700;
+  line-height: 1.6;
+}
+
+.rate-cell .rate-unit {
+  display: block;
+  margin-top: 3px;
+  font-size: 8px;
+  font-weight: 760;
+  letter-spacing: 0.06em;
+  opacity: 0.75;
+  text-transform: uppercase;
+}
+
+.udp-na {
+  color: var(--muted);
+  font-size: 14px;
 }
 
 @media (max-width: 760px) {
