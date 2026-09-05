@@ -8,10 +8,33 @@ from typing import Any
 class Protocol(StrEnum):
     HTTP2 = "http2"
     HTTP3 = "http3"
+    UDP_STREAM = "udp-over-stream"
+    UDP_DATAGRAM = "udp-over-datagram"
 
     @property
     def label(self) -> str:
-        return {self.HTTP2: "HTTP/2", self.HTTP3: "HTTP/3"}[self]
+        return {
+            self.HTTP2: "HTTP/2",
+            self.HTTP3: "HTTP/3",
+            self.UDP_STREAM: "UDP over stream",
+            self.UDP_DATAGRAM: "UDP over datagram",
+        }[self]
+
+    @property
+    def is_http(self) -> bool:
+        return self in {Protocol.HTTP2, Protocol.HTTP3}
+
+    @property
+    def is_udp(self) -> bool:
+        return self in {Protocol.UDP_STREAM, Protocol.UDP_DATAGRAM}
+
+    @property
+    def udp_mode(self) -> str:
+        if self == Protocol.UDP_STREAM:
+            return "stream"
+        if self == Protocol.UDP_DATAGRAM:
+            return "datagram"
+        raise ValueError(f"{self.value} has no UDP transport mode")
 
 
 class Status(StrEnum):
@@ -109,15 +132,22 @@ class RunResult:
 
 
 def aggregate_status(probes: list[ProbeResult]) -> Status:
+    """Aggregate probe statuses for a cell.
+
+    ``unsupported`` probes only matter when every probe in the cell is
+    unsupported; otherwise they are ignored so a cell with one unsupported
+    probe and several passing probes stays green.
+    """
     statuses = {probe.status for probe in probes}
     if not statuses:
         return Status.ERROR
+    statuses.discard(Status.UNSUPPORTED)
+    if not statuses:
+        return Status.UNSUPPORTED
     if Status.ERROR in statuses:
         return Status.ERROR
     if Status.FAIL in statuses:
         return Status.FAIL
-    if statuses == {Status.UNSUPPORTED}:
-        return Status.UNSUPPORTED
     if statuses == {Status.PASS}:
         return Status.PASS
     return Status.FAIL

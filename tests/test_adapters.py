@@ -6,6 +6,7 @@ from shadowquic_interop.adapters import (
     SERVER_PORT,
     SOCKS_PORT,
     USERNAME,
+    Implementation,
     IMPLEMENTATIONS,
     select_implementations,
 )
@@ -97,6 +98,59 @@ class AdapterTests(unittest.TestCase):
     def test_selection_preserves_order_without_duplicates(self) -> None:
         selected = select_implementations(["quicproxy", "shadowquic", "quicproxy"])
         self.assertEqual([item.key for item in selected], ["quicproxy", "shadowquic"])
+
+    def test_udp_modes_are_client_side_config_choices(self) -> None:
+        cases = {
+            "shadowquic": ("over-stream: false", "over-stream: true"),
+            "mihomo": ("udp-over-stream: false", "udp-over-stream: true"),
+            "clash-rs": ("over-stream: false", "over-stream: true"),
+        }
+        for key, (datagram_line, stream_line) in cases.items():
+            implementation = IMPLEMENTATIONS[key]
+            with self.subTest(client=key):
+                self.assertIn(
+                    datagram_line,
+                    implementation.render_client("server", udp_mode="datagram"),
+                )
+                self.assertIn(
+                    stream_line,
+                    implementation.render_client("server", udp_mode="stream"),
+                )
+
+    def test_quicproxy_udp_mode_toggles_udp_mod(self) -> None:
+        implementation = IMPLEMENTATIONS["quicproxy"]
+        datagram = json.loads(
+            implementation.render_client("sq-server", udp_mode="datagram")
+        )
+        stream = json.loads(implementation.render_client("sq-server", udp_mode="stream"))
+        outbound = "outbounds.servers.shadowquic"
+        self.assertEqual(
+            datagram["outbounds"]["servers"]["shadowquic"]["udp_mod"], "datagram"
+        )
+        self.assertEqual(
+            stream["outbounds"]["servers"]["shadowquic"]["udp_mod"], "stream"
+        )
+
+    def test_render_rejects_mode_not_in_udp_modes(self) -> None:
+        limited = Implementation(
+            key="limited",
+            name="limited",
+            source="https://example.com/limited",
+            image="example/limited",
+            config_format="yaml",
+            udp_modes=frozenset({"stream"}),
+        )
+        with self.assertRaisesRegex(ValueError, "UDP-over-datagram"):
+            limited.render_client("server", udp_mode="datagram")
+
+    def test_default_client_render_matches_datagram_mode(self) -> None:
+        for key in ("shadowquic", "quicproxy", "mihomo", "clash-rs"):
+            implementation = IMPLEMENTATIONS[key]
+            with self.subTest(client=key):
+                self.assertEqual(
+                    implementation.render_client("server"),
+                    implementation.render_client("server", udp_mode="datagram"),
+                )
 
 
 if __name__ == "__main__":

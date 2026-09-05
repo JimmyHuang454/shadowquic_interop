@@ -66,7 +66,7 @@ class RunnerTests(unittest.TestCase):
         result = InteropRunner(backend).run(
             clients=[shadowquic],
             servers=[shadowquic],
-            protocols=[Protocol.HTTP2],
+            protocols=[Protocol.HTTP2, Protocol.UDP_DATAGRAM],
             target="https://example.com/",
             work_dir=Path("work"),
         )
@@ -74,9 +74,43 @@ class RunnerTests(unittest.TestCase):
             path = write_result(result, Path(directory))
             loaded = read_result(path)
             self.assertEqual(loaded.run_id, result.run_id)
+            self.assertEqual(loaded.protocols, [Protocol.HTTP2, Protocol.UDP_DATAGRAM])
             self.assertEqual(loaded.results[0].probes[0].protocol, Protocol.HTTP2)
+            self.assertEqual(loaded.results[0].probes[1].protocol, Protocol.UDP_DATAGRAM)
             latest = json.loads((Path(directory) / "latest.json").read_text())
             self.assertEqual(latest["schema_version"], 1)
+
+    def test_missing_udp_mode_only_marks_that_probe_unsupported(self) -> None:
+        from dataclasses import replace
+
+        backend = FakeBackend()
+        client = replace(
+            IMPLEMENTATIONS["shadowquic"], udp_modes=frozenset({"stream"})
+        )
+        server = IMPLEMENTATIONS["shadowquic"]
+        result = InteropRunner(backend).run(
+            clients=[client],
+            servers=[server],
+            protocols=[
+                Protocol.HTTP2,
+                Protocol.UDP_STREAM,
+                Protocol.UDP_DATAGRAM,
+            ],
+            target="https://example.com/",
+            work_dir=Path("work"),
+            build=False,
+        )
+        cell = result.results[0]
+        self.assertEqual(cell.status, Status.PASS)
+        by_protocol = {probe.protocol: probe for probe in cell.probes}
+        self.assertEqual(by_protocol[Protocol.HTTP2].status, Status.PASS)
+        self.assertEqual(by_protocol[Protocol.UDP_STREAM].status, Status.PASS)
+        self.assertEqual(by_protocol[Protocol.UDP_DATAGRAM].status, Status.UNSUPPORTED)
+        # The unsupported probe never reaches the backend.
+        self.assertEqual(len(backend.calls), 1)
+        self.assertEqual(
+            backend.calls[0]["protocols"], [Protocol.HTTP2, Protocol.UDP_STREAM]
+        )
 
 
 if __name__ == "__main__":

@@ -14,6 +14,20 @@
     unsupported: { symbol: "\u2013", label: "Unsupported" },
   };
 
+  const protocolNames = {
+    http2: "HTTP/2",
+    http3: "HTTP/3",
+    "udp-over-stream": "UDP over stream",
+    "udp-over-datagram": "UDP over datagram",
+  };
+  const protocolBadges = {
+    http2: "H2",
+    http3: "H3",
+    "udp-over-stream": "UDP/S",
+    "udp-over-datagram": "UDP/D",
+  };
+  const protocolValues = Object.keys(protocolNames);
+
   if (!runs.length) {
     document.getElementById("empty-state").hidden = false;
     runSelect.disabled = true;
@@ -33,7 +47,7 @@
     ? requestedRun
     : runs[0].run_id;
   const requestedProtocol = params.get("protocol");
-  protocolSelect.value = ["all", "http2", "http3"].includes(requestedProtocol)
+  protocolSelect.value = ["all", ...protocolValues].includes(requestedProtocol)
     ? requestedProtocol
     : "all";
 
@@ -201,22 +215,37 @@
     const title = document.createElement("div");
     title.className = "probe-title";
     const name = document.createElement("strong");
-    name.textContent = probe.protocol === "http2" ? "HTTP/2" : "HTTP/3";
+    name.textContent = protocolNames[probe.protocol] || probe.protocol;
     const status = document.createElement("span");
     status.className = `status-text ${probe.status}`;
     status.textContent = statusView[probe.status]?.label || probe.status;
     title.append(name, status);
     section.append(title);
 
+    const metrics = probe.metrics || {};
     const values = [];
     if (probe.http_status != null) values.push(["HTTP status", String(probe.http_status)]);
     if (probe.duration_ms != null) values.push(["Total", `${probe.duration_ms} ms`]);
-    for (const [key, value] of Object.entries(probe.metrics || {})) {
-      values.push([key, key === "size" ? `${value} B` : `${value} ms`]);
+    if (probe.protocol === "udp-over-stream" || probe.protocol === "udp-over-datagram") {
+      if (metrics.sent_bytes != null && metrics.window_ms != null) {
+        values.push(["Upload", `${rateMBs(metrics.sent_bytes, metrics.window_ms)} MB/s`]);
+      }
+      if (metrics.recv_bytes != null && probe.duration_ms != null) {
+        values.push(["Download", `${rateMBs(metrics.recv_bytes, probe.duration_ms)} MB/s`]);
+      }
+      if (metrics.recv_packets != null && metrics.sent_packets != null) {
+        values.push([
+          "Echoed datagrams",
+          `${metrics.recv_packets} / ${metrics.sent_packets}`,
+        ]);
+      }
+    }
+    for (const [key, value] of Object.entries(metrics)) {
+      values.push([metricLabel(key), formatMetric(key, value)]);
     }
     if (values.length) {
-      const metrics = document.createElement("dl");
-      metrics.className = "metrics";
+      const list = document.createElement("dl");
+      list.className = "metrics";
       for (const [key, value] of values) {
         const wrapper = document.createElement("div");
         const dt = document.createElement("dt");
@@ -224,9 +253,9 @@
         dt.textContent = key;
         dd.textContent = value;
         wrapper.append(dt, dd);
-        metrics.append(wrapper);
+        list.append(wrapper);
       }
-      section.append(metrics);
+      section.append(list);
     }
     if (probe.message) {
       const message = document.createElement("p");
@@ -235,6 +264,22 @@
       section.append(message);
     }
     return section;
+  }
+
+  function rateMBs(bytes, milliseconds) {
+    const seconds = milliseconds / 1000;
+    if (!Number.isFinite(bytes) || !seconds) return "0.00";
+    return (bytes / 1000000 / seconds).toFixed(2);
+  }
+
+  function metricLabel(key) {
+    return key.replace(/_/g, " ");
+  }
+
+  function formatMetric(key, value) {
+    if (key === "size" || key.endsWith("_bytes")) return `${value} B`;
+    if (key.endsWith("_ms")) return `${value} ms`;
+    return String(value);
   }
 
   function statusFor(cell, protocol) {

@@ -13,6 +13,9 @@ from .models import CellResult, ProbeResult, Protocol, Status, aggregate_status
 
 
 PROXYPEN_IMAGE = "shadowquic-interop/proxypen:latest"
+UDP_IMAGE = "shadowquic-interop/udp:latest"
+UDP_TARGET_PORT = 9000
+UDP_WINDOW_SECONDS = 2.0
 
 
 class BackendError(RuntimeError):
@@ -139,6 +142,18 @@ class DockerBackend:
             ],
             timeout=1800,
         )
+        self.commands.run(
+            [
+                "docker",
+                "build",
+                "-f",
+                "docker/udp.Dockerfile",
+                "-t",
+                UDP_IMAGE,
+                ".",
+            ],
+            timeout=600,
+        )
 
     def run_cell(
         self,
@@ -154,31 +169,90 @@ class DockerBackend:
         network = f"sq-interop-{suffix}"
         server_name = f"sq-server-{suffix}"
         client_name = f"sq-client-{suffix}"
+        udp_target_name = f"sq-udp-{suffix}"
         cell_dir = work_dir / f"{client.key}_{server.key}"
         log_dir = cell_dir / "logs"
         server_config = cell_dir / "server" / server.config_name
-        client_config = cell_dir / "client" / client.config_name
-        server_config.parent.mkdir(parents=True, exist_ok=True)
-        client_config.parent.mkdir(parents=True, exist_ok=True)
+        client_configs: dict[str, Path] = {}
         log_dir.mkdir(parents=True, exist_ok=True)
+        (cell_dir / "server").mkdir(parents=True, exist_ok=True)
+        (cell_dir / "client").mkdir(parents=True, exist_ok=True)
+
         server_config.write_text(server.render_server(), encoding="utf-8")
-        client_config.write_text(client.render_client(server_name), encoding="utf-8")
+        for role, mode in _client_roles(protocols):
+            path = cell_dir / "client" / _config_name(client.config_name, role)
+            path.write_text(
+                client.render_client(server_name, udp_mode=mode), encoding="utf-8"
+            )
+            client_configs[role] = path
 
         probes: list[ProbeResult] = []
         message: str | None = None
         created_network = False
+        containers: list[tuple[str, Path]] = []
         try:
             self.commands.run(["docker", "network", "create", network], timeout=30)
             created_network = True
             self._start_container(server_name, network, server, server_config)
+            containers.append((server_name, log_dir / "server.log"))
             self._assert_running(server_name, "server")
-            self._start_container(client_name, network, client, client_config)
-            self._assert_running(client_name, "client")
+
+            target_ip: str | None = None
+            if any(protocol.is_udp for protocol in protocols):
+                self.commands.run(
+                    [
+                        "docker",
+                        "run",
+                        "--detach",
+                        "--name",
+                        udp_target_name,
+                        "--network",
+                        network,
+                        UDP_IMAGE,
+                        "echo",
+                        "--port",
+                        str(UDP_TARGET_PORT),
+                    ],
+                    timeout=60,
+                )
+                containers.append((udp_target_name, log_dir / "udp.log"))
+                self._assert_running(udp_target_name, "udp target")
+                target_ip = self._container_ip(udp_target_name)
+
+            client_containers: dict[str, str] = {}
+            for role, _ in _client_roles(protocols):
+                if role == "default":
+                    name = client_name
+                else:
+                    name = f"{client_name}-{role}"
+                self._start_container(
+                    name, network, client, client_configs[role]
+                )
+                containers.append((name, log_dir / ("client.log" if role == "default" else f"client-{role}.log")))
+                client_containers[role] = name
+                self._assert_running(name, f"{role} client")
+
             time.sleep(self.readiness_delay)
-            self._assert_running(server_name, "server")
-            self._assert_running(client_name, "client")
+            for name, _ in containers:
+                self._assert_running(name, "container")
+
             for protocol in protocols:
-                probes.append(self._probe(network, client_name, target, protocol))
+                if protocol.is_udp:
+                    assert target_ip is not None
+                    probes.append(
+                        self._probe_udp(
+                            network,
+                            client_containers[protocol.udp_mode],
+                            target_ip,
+                            protocol,
+                        )
+                    )
+                else:
+                    probes.append(
+                        self._probe(
+                            network, client_containers["default"], target, protocol
+                        )
+                    )
         except BackendError as exc:
             message = str(exc)
             completed = {probe.protocol for probe in probes}
@@ -188,10 +262,9 @@ class DockerBackend:
                 if protocol not in completed
             )
         finally:
-            self._capture_logs(server_name, log_dir / "server.log")
-            self._capture_logs(client_name, log_dir / "client.log")
-            self._cleanup_container(client_name)
-            self._cleanup_container(server_name)
+            self._capture_logs(containers)
+            for name, _ in reversed(containers):
+                self._cleanup_container(name)
             if created_network:
                 self.commands.run(
                     ["docker", "network", "rm", network], timeout=30, check=False
@@ -243,6 +316,22 @@ class DockerBackend:
             ).output.strip()
             raise BackendError(f"{role} {name} stopped during startup: {logs[-1200:]}")
 
+    def _container_ip(self, name: str) -> str:
+        result = self.commands.run(
+            [
+                "docker",
+                "inspect",
+                "-f",
+                "{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}",
+                name,
+            ],
+            timeout=30,
+        )
+        address = result.stdout.strip()
+        if not address:
+            raise BackendError(f"container {name} has no network address")
+        return address
+
     def _probe(
         self, network: str, client_name: str, target: str, protocol: Protocol
     ) -> ProbeResult:
@@ -269,15 +358,69 @@ class DockerBackend:
         )
         return parse_proxypen_output(protocol, result.output, result.returncode)
 
-    def _capture_logs(self, name: str, destination: Path) -> None:
+    def _probe_udp(
+        self,
+        network: str,
+        client_name: str,
+        target_ip: str,
+        protocol: Protocol,
+    ) -> ProbeResult:
         result = self.commands.run(
-            ["docker", "logs", "--timestamps", name], timeout=30, check=False
+            [
+                "docker",
+                "run",
+                "--rm",
+                "--network",
+                network,
+                UDP_IMAGE,
+                "probe",
+                "--proxy",
+                f"socks5://{client_name}:{SOCKS_PORT}",
+                "--target",
+                f"{target_ip}:{UDP_TARGET_PORT}",
+                "--seconds",
+                str(UDP_WINDOW_SECONDS),
+                "--timeout",
+                str(self.timeout),
+            ],
+            timeout=self.timeout + 15,
+            check=False,
         )
-        if result.output:
-            destination.write_text(result.output, encoding="utf-8")
+        return parse_udp_probe_output(protocol, result.output, result.returncode)
+
+    def _capture_logs(self, containers: list[tuple[str, Path]]) -> None:
+        for name, destination in containers:
+            result = self.commands.run(
+                ["docker", "logs", "--timestamps", name], timeout=30, check=False
+            )
+            if result.output:
+                destination.write_text(result.output, encoding="utf-8")
 
     def _cleanup_container(self, name: str) -> None:
         self.commands.run(["docker", "rm", "--force", name], timeout=30, check=False)
+
+
+def _client_roles(protocols: Sequence[Protocol]) -> list[tuple[str, str | None]]:
+    """Map requested protocols to client config roles.
+
+    ``default`` serves the HTTP probes (UDP mode is irrelevant there), while
+    each UDP transport mode gets its own client container because the client
+    decides at startup how to carry UDP sessions.
+    """
+    roles: list[tuple[str, str | None]] = []
+    if any(protocol.is_http for protocol in protocols):
+        roles.append(("default", None))
+    for protocol in protocols:
+        if protocol.is_udp and protocol.udp_mode not in {role for role, _ in roles}:
+            roles.append((protocol.udp_mode, protocol.udp_mode))
+    return roles
+
+
+def _config_name(config_name: str, role: str) -> str:
+    if role == "default":
+        return config_name
+    stem, _, ext = config_name.rpartition(".")
+    return f"{stem}-{role}.{ext}"
 
 
 _SUCCESS = re.compile(
@@ -324,5 +467,62 @@ def parse_proxypen_output(
         protocol=protocol,
         status=Status.ERROR,
         message=f"unrecognized ProxyPen output: {detail}",
+        output=output,
+    )
+
+
+_UDP_OK = re.compile(
+    r"^\[UDP\]\s+OK\s+\((?P<duration>\d+)ms\)\s+"
+    r"sent:(?P<sent>\d+)B\s+recv:(?P<recv>\d+)B\s+"
+    r"sent_packets:(?P<sent_packets>\d+)\s+recv_packets:(?P<recv_packets>\d+)\s+"
+    r"window:(?P<window>\d+)ms$",
+    re.MULTILINE,
+)
+_UDP_FAILED = re.compile(
+    r"^\[UDP\]\s+FAILED:\s*(?P<message>.+)$",
+    re.MULTILINE,
+)
+
+
+def parse_udp_probe_output(
+    protocol: Protocol, output: str, returncode: int
+) -> ProbeResult:
+    """Parse the udp-probe tool summary into a ProbeResult.
+
+    The probe reports raw byte and packet counts; rates in MB/s are derived
+    by the report UI from ``sent_bytes``/``window_ms`` and
+    ``recv_bytes``/``elapsed``.
+    """
+    success = _UDP_OK.search(output)
+    if success:
+        metrics = {
+            "sent_bytes": int(success.group("sent")),
+            "recv_bytes": int(success.group("recv")),
+            "sent_packets": int(success.group("sent_packets")),
+            "recv_packets": int(success.group("recv_packets")),
+            "window_ms": int(success.group("window")),
+        }
+        return ProbeResult(
+            protocol=protocol,
+            status=Status.PASS,
+            duration_ms=int(success.group("duration")),
+            metrics=metrics,
+            output=output,
+        )
+
+    failure = _UDP_FAILED.search(output)
+    if failure:
+        return ProbeResult(
+            protocol=protocol,
+            status=Status.FAIL,
+            message=failure.group("message").strip(),
+            output=output,
+        )
+
+    detail = output.strip()[-1200:] or f"udp probe exited with status {returncode}"
+    return ProbeResult(
+        protocol=protocol,
+        status=Status.ERROR,
+        message=f"unrecognized udp probe output: {detail}",
         output=output,
     )

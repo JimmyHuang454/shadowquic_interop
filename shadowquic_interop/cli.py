@@ -36,9 +36,17 @@ def build_parser() -> argparse.ArgumentParser:
     run.add_argument(
         "--protocols",
         type=_protocols,
-        default=[Protocol.HTTP2, Protocol.HTTP3],
+        default=[
+            Protocol.HTTP2,
+            Protocol.HTTP3,
+            Protocol.UDP_STREAM,
+            Protocol.UDP_DATAGRAM,
+        ],
         metavar="LIST",
-        help="comma-separated protocols: http2,http3",
+        help=(
+            "comma-separated probes: http2, http3, udp-over-stream, "
+            "udp-over-datagram"
+        ),
     )
     run.add_argument("--target", default="https://cloudflare.com/")
     run.add_argument("--results-dir", type=Path, default=Path("results"))
@@ -129,6 +137,9 @@ def _protocols(value: str) -> list[Protocol]:
     try:
         protocols = [Protocol(item) for item in _csv(value)]
     except ValueError as exc:
-        raise argparse.ArgumentTypeError("protocols must be http2 and/or http3") from exc
+        raise argparse.ArgumentTypeError(
+            "protocols must be http2, http3, udp-over-stream and/or "
+            "udp-over-datagram"
+        ) from exc
     return list(dict.fromkeys(protocols))
 

@@ -13,7 +13,7 @@ FIXTURE = {
     "started_at": "2026-07-19T00:00:00Z",
     "finished_at": "2026-07-19T00:00:01Z",
     "target": "https://example.com/",
-    "protocols": ["http2"],
+    "protocols": ["http2", "udp-over-stream"],
     "implementations": [
         {
             "key": "shadowquic",
@@ -42,7 +42,22 @@ FIXTURE = {
                     "metrics": {"ttfb": 20},
                     "message": None,
                     "output": "ok",
-                }
+                },
+                {
+                    "protocol": "udp-over-stream",
+                    "status": "pass",
+                    "http_status": None,
+                    "duration_ms": 2009,
+                    "metrics": {
+                        "sent_bytes": 472080000,
+                        "recv_bytes": 472080000,
+                        "sent_packets": 337200,
+                        "recv_packets": 337200,
+                        "window_ms": 2000,
+                    },
+                    "message": None,
+                    "output": "[UDP]   OK ...",
+                },
             ],
         }
     ],
