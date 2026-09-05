@@ -121,8 +121,10 @@ run IDs, and embeds the archive into `site/index.html`. Published URLs accept
 ## GitHub automation
 
 [`ci.yml`](.github/workflows/ci.yml) validates every push and pull request.
-[`interop.yml`](.github/workflows/interop.yml) runs daily at 16:30 UTC and can
-also be started manually. It builds current upstream images, executes the
+[`interop.yml`](.github/workflows/interop.yml) runs the full matrix after every
+push to the default branch that touches code, daily at 16:30 UTC, and on
+manual dispatch. Its own result commits carry `[skip ci]` so they never
+re-trigger it. The workflow builds current upstream images, executes the
 matrix, uploads diagnostic logs, commits the new JSON result to the default
 branch, and deploys the complete archive through GitHub Pages.
 

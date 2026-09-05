@@ -1,6 +1,19 @@
-name: Daily interoperability run
+name: Interoperability matrix
 
 on:
+  # Run the full Docker matrix after every code push to the default branch.
+  # The workflow's own result commits carry "[skip ci]", so they never
+  # re-trigger this workflow (no recursion). Scheduling still covers daily
+  # runs, and workflow_dispatch keeps manual runs available.
+  push:
+    branches: [main]
+    paths:
+      - "docker/**"
+      - "shadowquic_interop/**"
+      - "tests/**"
+      - "web/**"
+      - "pyproject.toml"
+      - ".github/workflows/interop.yml"
   schedule:
     - cron: "30 16 * * *"
   workflow_dispatch:
