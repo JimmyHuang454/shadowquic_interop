@@ -9,10 +9,21 @@ from shadowquic_interop.backend import (
     DockerBackend,
     PROXYPEN_IMAGE,
     UDP_IMAGE,
+    parse_mem_usage,
     parse_proxypen_output,
     parse_udp_probe_output,
 )
 from shadowquic_interop.models import Protocol, Status
+
+
+class MemoryParserTests(unittest.TestCase):
+    def test_docker_stats_mem_usage_is_parsed_to_bytes(self) -> None:
+        self.assertEqual(parse_mem_usage("100MiB / 2GiB\n"), 104857600)
+        self.assertEqual(parse_mem_usage("1.5GiB / 2GiB\n"), 1610612736)
+        self.assertEqual(parse_mem_usage("12345B / 2GiB\n"), 12345)
+
+    def test_unparsable_output_is_ignored(self) -> None:
+        self.assertIsNone(parse_mem_usage("no numbers here"))
 
 
 class UDPParserTests(unittest.TestCase):
@@ -20,7 +31,8 @@ class UDPParserTests(unittest.TestCase):
         output = (
             "udp: testing ...\n"
             "[UDP]   OK (2009ms) sent:472080000B recv:210534800B "
-            "sent_packets:337200 recv_packets:150382 window:2000ms\n"
+            "sent_packets:337200 recv_packets:150382 window:2000ms "
+            "lat_min:1 lat_avg:2 lat_p95:4 lat_max:9 lat_samples:30\n"
         )
         result = parse_udp_probe_output(Protocol.UDP_STREAM, output, 0)
         self.assertEqual(result.status, Status.PASS)
@@ -30,6 +42,20 @@ class UDPParserTests(unittest.TestCase):
         self.assertEqual(result.metrics["sent_packets"], 337200)
         self.assertEqual(result.metrics["recv_packets"], 150382)
         self.assertEqual(result.metrics["window_ms"], 2000)
+        self.assertEqual(result.metrics["latency_min_ms"], 1)
+        self.assertEqual(result.metrics["latency_avg_ms"], 2)
+        self.assertEqual(result.metrics["latency_p95_ms"], 4)
+        self.assertEqual(result.metrics["latency_max_ms"], 9)
+        self.assertEqual(result.metrics["latency_samples"], 30)
+
+    def test_udp_ok_without_latency_fields_still_parses(self) -> None:
+        output = (
+            "[UDP]   OK (2012ms) sent:1000B recv:1000B "
+            "sent_packets:1 recv_packets:1 window:2000ms\n"
+        )
+        result = parse_udp_probe_output(Protocol.UDP_DATAGRAM, output, 0)
+        self.assertEqual(result.status, Status.PASS)
+        self.assertNotIn("latency_min_ms", result.metrics)
 
     def test_udp_failure(self) -> None:
         output = "[UDP]   FAILED: no echo datagrams returned during the throughput test\n"
@@ -165,7 +191,11 @@ class RecordingCommands:
             pattern = command[command.index("-f") + 1] if "-f" in command else ""
             if "Running" in pattern:
                 return CommandResult(command, 0, "true\n", "")
+            if "MemoryStats" in pattern:
+                return CommandResult(command, 0, "104857600\n", "")
             return CommandResult(command, 0, "172.30.0.9\n", "")
+        if command[:2] == ["docker", "stats"]:
+            return CommandResult(command, 0, "100MiB / 2GiB\n", "")
         if command[:2] == ["docker", "logs"]:
             return CommandResult(command, 0, "", "")
         if PROXYPEN_IMAGE in command:
@@ -177,10 +207,65 @@ class RecordingCommands:
                 command,
                 0,
                 "[UDP]   OK (2009ms) sent:472080000B recv:472080000B "
-                "sent_packets:337200 recv_packets:337200 window:2000ms\n",
+                "sent_packets:337200 recv_packets:337200 window:2000ms "
+                "lat_min:1 lat_avg:2 lat_p95:4 lat_max:9 lat_samples:30\n",
                 "",
             )
         return CommandResult(command, 0, "", "")
+
+
+class LoadCellTests(unittest.TestCase):
+    def test_load_phase_records_latency_and_memory_metrics(self) -> None:
+        commands = RecordingCommands()
+        backend = DockerBackend(
+            command_runner=commands, readiness_delay=0, load_connections=2
+        )
+        implementation = IMPLEMENTATIONS["quicproxy"]
+        with tempfile.TemporaryDirectory() as directory:
+            result = backend.run_cell(
+                client=implementation,
+                server=implementation,
+                protocols=[Protocol.HTTP2, Protocol.UDP_DATAGRAM],
+                target="https://example.com/",
+                work_dir=Path(directory),
+            )
+        self.assertEqual(result.status, Status.PASS)
+        self.assertEqual(len(result.probes), 2)
+
+        http = result.probes[0]
+        self.assertEqual(http.protocol, Protocol.HTTP2)
+        self.assertEqual(http.metrics["load_connections"], 2)
+        self.assertEqual(http.metrics["load_ok"], 2)
+        self.assertEqual(http.metrics["load_latency_avg_ms"], 20)
+        self.assertEqual(http.metrics["load_mem_client_max_kb"], 102400)
+        self.assertEqual(http.metrics["load_mem_server_max_kb"], 102400)
+
+        udp = result.probes[1]
+        self.assertEqual(udp.protocol, Protocol.UDP_DATAGRAM)
+        self.assertEqual(udp.metrics["load_sent_packets"], 337200 * 2)
+        self.assertEqual(udp.metrics["load_recv_packets"], 337200 * 2)
+        self.assertEqual(udp.metrics["load_latency_min_ms"], 1)
+        self.assertEqual(udp.metrics["load_latency_avg_ms"], 2)
+        self.assertEqual(udp.metrics["load_latency_p95_ms"], 4)
+        self.assertEqual(udp.metrics["load_latency_max_ms"], 9)
+        # Functional metrics remain alongside the load metrics.
+        self.assertEqual(udp.metrics["window_ms"], 2000)
+        self.assertEqual(udp.metrics["latency_min_ms"], 1)
+
+    def test_zero_load_connections_skips_pressure_phase(self) -> None:
+        commands = RecordingCommands()
+        backend = DockerBackend(command_runner=commands, readiness_delay=0)
+        implementation = IMPLEMENTATIONS["quicproxy"]
+        with tempfile.TemporaryDirectory() as directory:
+            result = backend.run_cell(
+                client=implementation,
+                server=implementation,
+                protocols=[Protocol.UDP_STREAM],
+                target="https://example.com/",
+                work_dir=Path(directory),
+            )
+        self.assertEqual(result.status, Status.PASS)
+        self.assertEqual(result.probes[0].metrics.get("load_connections"), None)
 
 
 class PartialCellTests(unittest.TestCase):

@@ -52,6 +52,16 @@ def build_parser() -> argparse.ArgumentParser:
     run.add_argument("--results-dir", type=Path, default=Path("results"))
     run.add_argument("--work-dir", type=Path, default=Path("work"))
     run.add_argument("--timeout", type=int, default=30)
+    run.add_argument(
+        "--load-connections",
+        type=_nonnegative_int,
+        default=4,
+        metavar="N",
+        help=(
+            "concurrent connections per probe for the pressure phase "
+            "(default 4; 0 disables pressure/latency/memory sampling)"
+        ),
+    )
     run.add_argument("--no-build", action="store_true", help="reuse local images")
     run.add_argument(
         "--fail-on-test-failure",
@@ -90,7 +100,9 @@ def main(argv: list[str] | None = None) -> int:
 def _run(args: argparse.Namespace) -> int:
     clients = select_implementations(args.clients)
     servers = select_implementations(args.servers)
-    backend = DockerBackend(timeout=args.timeout)
+    backend = DockerBackend(
+        timeout=args.timeout, load_connections=args.load_connections
+    )
     result = InteropRunner(backend).run(
         clients=clients,
         servers=servers,
@@ -124,6 +136,13 @@ def _print_implementations() -> None:
         )
         if implementation.note:
             print(f"  {implementation.note}")
+
+
+def _nonnegative_int(value: str) -> int:
+    parsed = int(value)
+    if parsed < 0:
+        raise argparse.ArgumentTypeError("value cannot be negative")
+    return parsed
 
 
 def _csv(value: str) -> list[str]:

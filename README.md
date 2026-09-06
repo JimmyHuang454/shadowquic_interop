@@ -45,9 +45,14 @@ Each runnable client/server pair gets a private Docker bridge network:
    direct outbound → echo target and back) stays inside the cell network.
 5. The UDP probe sends 1200-byte datagrams for a fixed window and reports how
    many bytes and packets came back, letting the report show throughput in
-   MB/s plus echo coverage.
-6. The runner records protocol timings, endpoint output, and a cell status.
-7. Containers and the network are removed even when setup or probing fails.
+   MB/s plus echo coverage. It also paces single-datagram echo round trips to
+   measure latency (min/avg/p95/max).
+6. Every probe runs a pressure phase afterwards: `--load-connections` (default
+   4) concurrent sessions hit the same proxy while a sampler thread records
+   the peak memory of the client and server containers, and the latency
+   figures collected under that load are merged into the probe metrics.
+7. The runner records protocol timings, endpoint output, and a cell status.
+8. Containers and the network are removed even when setup or probing fails.
 
 `pass`, `fail`, `error`, and `unsupported` are distinct. A protocol failure
 means ProxyPen reached the test path and rejected the result. An error means
@@ -92,6 +97,9 @@ python3 -m shadowquic_interop run \
 python3 -m shadowquic_interop run \
   --protocols udp-over-stream,udp-over-datagram
 
+# No pressure phase (single functional probe per cell)
+python3 -m shadowquic_interop run --load-connections 0
+
 # Return nonzero when a runnable matrix cell fails
 python3 -m shadowquic_interop run --fail-on-test-failure
 ```
@@ -110,7 +118,11 @@ Every run creates `results/<UTC timestamp>.json` and refreshes
 - one HTTP result per requested protocol, including ProxyPen metrics
 - one UDP result per requested mode (`udp-over-stream`,
   `udp-over-datagram`) with byte and packet counts plus the throughput
-  window; the report derives upload/download rates in MB/s
+  window and per-datagram latency; the report derives upload/download rates
+  in MB/s
+- pressure metrics per probe when `--load-connections` is set: concurrent
+  session count/success, aggregated min/avg/p95/max latency in ms, and peak
+  client/server container memory in KiB
 - an optional error message and endpoint log directory
 
 The report generator reads every valid JSON file in `results/`, de-duplicates

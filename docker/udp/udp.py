@@ -16,7 +16,7 @@ The image ships two commands:
 
 Machine-readable output on stdout (parsed by the runner):
 
-  [UDP]   OK (2012ms) sent:10485760B recv:10485760B sent_packets:7488 recv_packets:7488 window:2000ms
+  [UDP]   OK (2012ms) sent:10485760B recv:10485760B sent_packets:7488 recv_packets:7488 window:2000ms lat_min:1 lat_avg:2 lat_p95:4 lat_max:9 lat_samples:30
   [UDP]   FAILED: <reason>
 
 Only the Python standard library is used so the container stays tiny.
@@ -203,6 +203,14 @@ def command_probe(args: argparse.Namespace) -> int:
             return 1
         log("handshake ok, echo target reachable through the relay")
 
+        latency = _run_latency_samples(
+            udp,
+            relay,
+            target_host,
+            target_port,
+            count=args.latency_samples,
+            deadline=deadline,
+        )
         result = _run_throughput(
             udp,
             relay,
@@ -221,11 +229,17 @@ def command_probe(args: argparse.Namespace) -> int:
                 "[UDP]   FAILED: no echo datagrams returned during the throughput test"
             )
             return 1
+        if latency is None:
+            print("[UDP]   FAILED: no latency samples could complete")
+            return 1
+        lat_min, lat_avg, lat_p95, lat_max, lat_samples = latency
         print(
             f"[UDP]   OK ({elapsed_ms}ms) "
             f"sent:{sent_bytes}B recv:{recv_bytes}B "
             f"sent_packets:{sent_packets} recv_packets:{recv_packets} "
-            f"window:{window_ms}ms"
+            f"window:{window_ms}ms "
+            f"lat_min:{lat_min} lat_avg:{lat_avg} lat_p95:{lat_p95} "
+            f"lat_max:{lat_max} lat_samples:{lat_samples}"
         )
         return 0
     except (RuntimeError, OSError) as exc:
@@ -238,6 +252,63 @@ def command_probe(args: argparse.Namespace) -> int:
                     sock.close()
                 except OSError:
                     pass
+
+
+def _run_latency_samples(
+    udp: socket.socket,
+    relay: tuple[str, int],
+    target_host: str,
+    target_port: int,
+    *,
+    count: int,
+    deadline: float,
+) -> tuple[int, int, int, int, int] | None:
+    """Measure one-datagram echo round trips back to back.
+
+    Samples run sequentially (one in flight at a time), so the numbers are
+    comparable across implementations; when several probes share the tunnel
+    at once the sample RTTs also reflect that contention.
+    """
+    rtts: list[float] = []
+    for seq in range(count):
+        if time.monotonic() > deadline:
+            break
+        payload = b"lat" + struct.pack(">H", seq)
+        udp.sendto(encode_packet(target_host, target_port, payload), relay)
+        started = time.monotonic()
+        while True:
+            if time.monotonic() - started >= 2.0 or time.monotonic() > deadline:
+                break
+            readable, _, _ = select.select(
+                [udp], [], [], min(0.2, deadline - time.monotonic())
+            )
+            if not readable:
+                continue
+            try:
+                data, _ = udp.recvfrom(65535)
+            except (BlockingIOError, OSError):
+                break
+            try:
+                _, _, echo = decode_packet(data)
+            except ValueError:
+                continue
+            if echo == payload:
+                rtts.append((time.monotonic() - started) * 1000)
+                break
+    if not rtts:
+        return None
+
+    ordered = sorted(rtts)
+    total = sum(ordered)
+    samples = len(ordered)
+    p95_index = max(0, int((0.95 * samples + 0.999) - 1))
+    return (
+        int(ordered[0]),
+        int(total / samples),
+        int(ordered[min(p95_index, samples - 1)]),
+        int(ordered[-1]),
+        samples,
+    )
 
 
 def _run_throughput(
@@ -347,6 +418,7 @@ def build_parser() -> argparse.ArgumentParser:
     probe.add_argument("--target", required=True, help="udp echo target host:port")
     probe.add_argument("--size", type=int, default=DEFAULT_SIZE, help="payload bytes per datagram")
     probe.add_argument("--seconds", type=float, default=2.0, help="throughput window in seconds")
+    probe.add_argument("--latency-samples", type=int, default=30, help="echo round-trip samples")
     probe.add_argument("--timeout", type=float, default=20.0, help="overall test timeout in seconds")
     probe.set_defaults(func=command_probe)
 

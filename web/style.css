@@ -583,6 +583,26 @@ footer .content-width {
   line-height: 1.6;
 }
 
+.rate-cell .rate-line.latency {
+  font-size: 10px;
+  opacity: 0.8;
+}
+
+.rate-cell .rate-line.memory {
+  font-size: 9px;
+  opacity: 0.7;
+}
+
+.cell-mem {
+  display: block;
+  margin-top: 7px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 9px;
+  font-weight: 700;
+  line-height: 1.4;
+  opacity: 0.75;
+}
+
 .rate-cell .rate-unit {
   display: block;
   margin-top: 3px;

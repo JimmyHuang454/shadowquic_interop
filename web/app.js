@@ -157,6 +157,14 @@
       badges.append(badge);
     }
     button.append(symbol, label, badges);
+    const memory = cellMemInfo(visibleProbes);
+    if (memory) {
+      const mem = document.createElement("span");
+      mem.className = "cell-mem";
+      mem.textContent = `C ${formatMemKb(memory.client)} / S ${formatMemKb(memory.server)} MB`;
+      mem.title = "Peak container memory during the load phase (client / server)";
+      button.append(mem);
+    }
     button.addEventListener("click", () => showDetails(cell, implementations, protocol));
     return button;
   }
@@ -233,6 +241,21 @@
         unit.className = "rate-unit";
         unit.textContent = "MB/s";
         button.append(upLine, downLine, unit);
+        const p95 = metrics.load_latency_p95_ms ?? metrics.latency_p95_ms;
+        if (p95 != null) {
+          const latency = document.createElement("span");
+          latency.className = "rate-line latency";
+          latency.textContent = `p95 ${p95} ms`;
+          button.append(latency);
+        }
+        const memory = cellMemInfo([probe]);
+        if (memory) {
+          const mem = document.createElement("span");
+          mem.className = "rate-line memory";
+          mem.textContent = `C ${formatMemKb(memory.client)} / S ${formatMemKb(memory.server)} MB`;
+          mem.title = "Peak container memory during the load phase (client / server)";
+          button.append(mem);
+        }
         button.setAttribute(
           "aria-label",
           `${implementations.get(cell.client)?.name || cell.client} client to ${
@@ -341,7 +364,19 @@
         ]);
       }
     }
+    if (metrics.load_connections != null) {
+      values.push([
+        "Load sessions",
+        `${metrics.load_ok ?? 0} / ${metrics.load_connections}`,
+      ]);
+    }
+    const memInfo = cellMemInfo([probe]);
+    if (memInfo) {
+      values.push(["Peak memory client", `${formatMemKb(memInfo.client)} MB`]);
+      values.push(["Peak memory server", `${formatMemKb(memInfo.server)} MB`]);
+    }
     for (const [key, value] of Object.entries(metrics)) {
+      if (key.startsWith("load_mem_")) continue; // shown as Peak memory above
       values.push([metricLabel(key), formatMetric(key, value)]);
     }
     if (values.length) {
@@ -373,12 +408,30 @@
     return (bytes / 1000000 / seconds).toFixed(2);
   }
 
+  function formatMemKb(kib) {
+    return (kib / 1024).toFixed(1);
+  }
+
+  function cellMemInfo(probes) {
+    for (const probe of probes) {
+      const metrics = probe.metrics || {};
+      if (metrics.load_mem_client_max_kb != null) {
+        return {
+          client: metrics.load_mem_client_max_kb,
+          server: metrics.load_mem_server_max_kb || 0,
+        };
+      }
+    }
+    return null;
+  }
+
   function metricLabel(key) {
-    return key.replace(/_/g, " ");
+    return key.replace(/_(ms|kb|bytes|packets|samples|connections)$/, "").replace(/_/g, " ");
   }
 
   function formatMetric(key, value) {
     if (key === "size" || key.endsWith("_bytes")) return `${value} B`;
+    if (key.endsWith("_kb")) return `${value} KB`;
     if (key.endsWith("_ms")) return `${value} ms`;
     return String(value);
   }
@@ -389,7 +442,7 @@
   }
 
   function probeLabel(protocol) {
-    return protocol === "http2" ? "H2" : "H3";
+    return protocolBadges[protocol] || protocol;
   }
 
   function updateLocation(runId, protocol) {
