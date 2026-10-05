@@ -1,0 +1,852 @@
+{
+  "finished_at": "2026-09-14T20:32:58.085481Z",
+  "implementations": [
+    {
+      "client": true,
+      "image": "ghcr.io/spongebob888/shadowquic:latest",
+      "key": "shadowquic",
+      "name": "shadowquic",
+      "note": null,
+      "server": true,
+      "source": "https://github.com/spongebob888/shadowquic"
+    },
+    {
+      "client": true,
+      "image": "shadowquic-interop/quicproxy:latest",
+      "key": "quicproxy",
+      "name": "QuicProxy",
+      "note": null,
+      "server": true,
+      "source": "https://github.com/RealBikiniBottom/QuicProxy"
+    },
+    {
+      "client": true,
+      "image": "shadowquic-interop/mihomo-meta:latest",
+      "key": "mihomo",
+      "name": "mihomo Meta",
+      "note": "Built from the upstream Meta branch, which includes ShadowQUIC outbound and listener support.",
+      "server": true,
+      "source": "https://github.com/MetaCubeX/mihomo/tree/Meta"
+    },
+    {
+      "client": true,
+      "image": "shadowquic-interop/clash-rs:latest",
+      "key": "clash-rs",
+      "name": "clash-rs",
+      "note": "Built locally from the latest GitHub release. ShadowQUIC is supported as an outbound only.",
+      "server": false,
+      "source": "https://github.com/Watfaq/clash-rs/releases/latest"
+    }
+  ],
+  "protocols": [
+    "http2",
+    "http3"
+  ],
+  "results": [
+    {
+      "client": "shadowquic",
+      "duration_ms": 4188,
+      "log_dir": "work/shadowquic_shadowquic/logs",
+      "message": null,
+      "probes": [
+        {
+          "duration_ms": 98,
+          "http_status": 301,
+          "message": null,
+          "metrics": {
+            "size": 167,
+            "socks": 50,
+            "tls": 5,
+            "ttfb": 98
+          },
+          "output": "Testing proxy socks5://sq-client-udp-3b4c7945ad:1080 -> cloudflare.com:443\n\n[HTTP/2]   OK 301 (98ms) socks:50ms tls:5ms ttfb:98ms size:167B\n",
+          "over_stream": null,
+          "protocol": "http2",
+          "status": "pass"
+        },
+        {
+          "duration_ms": 68,
+          "http_status": 301,
+          "message": null,
+          "metrics": {
+            "size": 167,
+            "socks": 42,
+            "tls": 7,
+            "ttfb": 68
+          },
+          "output": "Testing proxy socks5://sq-client-udp-3b4c7945ad:1080 -> cloudflare.com:443\n\n[HTTP/3]   OK 301 (68ms) socks:42ms tls:7ms ttfb:68ms size:167B\n",
+          "over_stream": false,
+          "protocol": "http3",
+          "status": "pass"
+        },
+        {
+          "duration_ms": 57,
+          "http_status": 301,
+          "message": null,
+          "metrics": {
+            "size": 167,
+            "socks": 42,
+            "tls": 7,
+            "ttfb": 57
+          },
+          "output": "Testing proxy socks5://sq-client-over-stream-3b4c7945ad:1080 -> cloudflare.com:443\n\n[HTTP/3]   OK 301 (57ms) socks:42ms tls:7ms ttfb:57ms size:167B\n",
+          "over_stream": true,
+          "protocol": "http3",
+          "status": "pass"
+        }
+      ],
+      "server": "shadowquic",
+      "status": "pass"
+    },
+    {
+      "client": "shadowquic",
+      "duration_ms": 3742,
+      "log_dir": "work/shadowquic_quicproxy/logs",
+      "message": null,
+      "probes": [
+        {
+          "duration_ms": 53,
+          "http_status": 301,
+          "message": null,
+          "metrics": {
+            "size": 167,
+            "socks": 42,
+            "tls": 4,
+            "ttfb": 53
+          },
+          "output": "Testing proxy socks5://sq-client-udp-52ecf8737d:1080 -> cloudflare.com:443\n\n[HTTP/2]   OK 301 (53ms) socks:42ms tls:4ms ttfb:53ms size:167B\n",
+          "over_stream": null,
+          "protocol": "http2",
+          "status": "pass"
+        },
+        {
+          "duration_ms": 60,
+          "http_status": 301,
+          "message": null,
+          "metrics": {
+            "size": 167,
+            "socks": 42,
+            "tls": 10,
+            "ttfb": 59
+          },
+          "output": "Testing proxy socks5://sq-client-udp-52ecf8737d:1080 -> cloudflare.com:443\n\n[HTTP/3]   OK 301 (60ms) socks:42ms tls:10ms ttfb:59ms size:167B\n",
+          "over_stream": false,
+          "protocol": "http3",
+          "status": "pass"
+        },
+        {
+          "duration_ms": 60,
+          "http_status": 301,
+          "message": null,
+          "metrics": {
+            "size": 167,
+            "socks": 41,
+            "tls": 11,
+            "ttfb": 60
+          },
+          "output": "Testing proxy socks5://sq-client-over-stream-52ecf8737d:1080 -> cloudflare.com:443\n\n[HTTP/3]   OK 301 (60ms) socks:41ms tls:11ms ttfb:60ms size:167B\n",
+          "over_stream": true,
+          "protocol": "http3",
+          "status": "pass"
+        }
+      ],
+      "server": "quicproxy",
+      "status": "pass"
+    },
+    {
+      "client": "shadowquic",
+      "duration_ms": 3817,
+      "log_dir": "work/shadowquic_mihomo/logs",
+      "message": null,
+      "probes": [
+        {
+          "duration_ms": 95,
+          "http_status": 301,
+          "message": null,
+          "metrics": {
+            "size": 167,
+            "socks": 41,
+            "tls": 5,
+            "ttfb": 55
+          },
+          "output": "Testing proxy socks5://sq-client-udp-a8d31a4c2c:1080 -> cloudflare.com:443\n\n[HTTP/2]   OK 301 (95ms) socks:41ms tls:5ms ttfb:55ms size:167B\n",
+          "over_stream": null,
+          "protocol": "http2",
+          "status": "pass"
+        },
+        {
+          "duration_ms": 70,
+          "http_status": 301,
+          "message": null,
+          "metrics": {
+            "size": 167,
+            "socks": 42,
+            "tls": 19,
+            "ttfb": 70
+          },
+          "output": "Testing proxy socks5://sq-client-udp-a8d31a4c2c:1080 -> cloudflare.com:443\n\n[HTTP/3]   OK 301 (70ms) socks:42ms tls:19ms ttfb:70ms size:167B\n",
+          "over_stream": false,
+          "protocol": "http3",
+          "status": "pass"
+        },
+        {
+          "duration_ms": 69,
+          "http_status": 301,
+          "message": null,
+          "metrics": {
+            "size": 167,
+            "socks": 41,
+            "tls": 20,
+            "ttfb": 69
+          },
+          "output": "Testing proxy socks5://sq-client-over-stream-a8d31a4c2c:1080 -> cloudflare.com:443\n\n[HTTP/3]   OK 301 (69ms) socks:41ms tls:20ms ttfb:69ms size:167B\n",
+          "over_stream": true,
+          "protocol": "http3",
+          "status": "pass"
+        }
+      ],
+      "server": "mihomo",
+      "status": "pass"
+    },
+    {
+      "client": "shadowquic",
+      "duration_ms": 0,
+      "log_dir": null,
+      "message": "Built locally from the latest GitHub release. ShadowQUIC is supported as an outbound only.",
+      "probes": [
+        {
+          "duration_ms": null,
+          "http_status": null,
+          "message": "Built locally from the latest GitHub release. ShadowQUIC is supported as an outbound only.",
+          "metrics": {},
+          "output": "",
+          "over_stream": null,
+          "protocol": "http2",
+          "status": "unsupported"
+        },
+        {
+          "duration_ms": null,
+          "http_status": null,
+          "message": "Built locally from the latest GitHub release. ShadowQUIC is supported as an outbound only.",
+          "metrics": {},
+          "output": "",
+          "over_stream": false,
+          "protocol": "http3",
+          "status": "unsupported"
+        },
+        {
+          "duration_ms": null,
+          "http_status": null,
+          "message": "Built locally from the latest GitHub release. ShadowQUIC is supported as an outbound only.",
+          "metrics": {},
+          "output": "",
+          "over_stream": true,
+          "protocol": "http3",
+          "status": "unsupported"
+        }
+      ],
+      "server": "clash-rs",
+      "status": "unsupported"
+    },
+    {
+      "client": "quicproxy",
+      "duration_ms": 3717,
+      "log_dir": "work/quicproxy_shadowquic/logs",
+      "message": null,
+      "probes": [
+        {
+          "duration_ms": 56,
+          "http_status": 301,
+          "message": null,
+          "metrics": {
+            "size": 167,
+            "socks": 1,
+            "tls": 7,
+            "ttfb": 15
+          },
+          "output": "Testing proxy socks5://sq-client-udp-3a1524ce6a:1080 -> cloudflare.com:443\n\n[HTTP/2]   OK 301 (56ms) socks:1ms tls:7ms ttfb:15ms size:167B\n",
+          "over_stream": null,
+          "protocol": "http2",
+          "status": "pass"
+        },
+        {
+          "duration_ms": 15,
+          "http_status": 301,
+          "message": null,
+          "metrics": {
+            "size": 167,
+            "socks": 1,
+            "tls": 6,
+            "ttfb": 15
+          },
+          "output": "Testing proxy socks5://sq-client-udp-3a1524ce6a:1080 -> cloudflare.com:443\n\n[HTTP/3]   OK 301 (15ms) socks:1ms tls:6ms ttfb:15ms size:167B\n",
+          "over_stream": false,
+          "protocol": "http3",
+          "status": "pass"
+        },
+        {
+          "duration_ms": 19,
+          "http_status": 301,
+          "message": null,
+          "metrics": {
+            "size": 167,
+            "socks": 1,
+            "tls": 9,
+            "ttfb": 19
+          },
+          "output": "Testing proxy socks5://sq-client-over-stream-3a1524ce6a:1080 -> cloudflare.com:443\n\n[HTTP/3]   OK 301 (19ms) socks:1ms tls:9ms ttfb:19ms size:167B\n",
+          "over_stream": true,
+          "protocol": "http3",
+          "status": "pass"
+        }
+      ],
+      "server": "shadowquic",
+      "status": "pass"
+    },
+    {
+      "client": "quicproxy",
+      "duration_ms": 3792,
+      "log_dir": "work/quicproxy_quicproxy/logs",
+      "message": null,
+      "probes": [
+        {
+          "duration_ms": 55,
+          "http_status": 301,
+          "message": null,
+          "metrics": {
+            "size": 167,
+            "socks": 1,
+            "tls": 11,
+            "ttfb": 55
+          },
+          "output": "Testing proxy socks5://sq-client-udp-188776df23:1080 -> cloudflare.com:443\n\n[HTTP/2]   OK 301 (55ms) socks:1ms tls:11ms ttfb:55ms size:167B\n",
+          "over_stream": null,
+          "protocol": "http2",
+          "status": "pass"
+        },
+        {
+          "duration_ms": 19,
+          "http_status": 301,
+          "message": null,
+          "metrics": {
+            "size": 167,
+            "socks": 1,
+            "tls": 10,
+            "ttfb": 19
+          },
+          "output": "Testing proxy socks5://sq-client-udp-188776df23:1080 -> cloudflare.com:443\n\n[HTTP/3]   OK 301 (19ms) socks:1ms tls:10ms ttfb:19ms size:167B\n",
+          "over_stream": false,
+          "protocol": "http3",
+          "status": "pass"
+        },
+        {
+          "duration_ms": 27,
+          "http_status": 301,
+          "message": null,
+          "metrics": {
+            "size": 167,
+            "socks": 1,
+            "tls": 13,
+            "ttfb": 27
+          },
+          "output": "Testing proxy socks5://sq-client-over-stream-188776df23:1080 -> cloudflare.com:443\n\n[HTTP/3]   OK 301 (27ms) socks:1ms tls:13ms ttfb:27ms size:167B\n",
+          "over_stream": true,
+          "protocol": "http3",
+          "status": "pass"
+        }
+      ],
+      "server": "quicproxy",
+      "status": "pass"
+    },
+    {
+      "client": "quicproxy",
+      "duration_ms": 3757,
+      "log_dir": "work/quicproxy_mihomo/logs",
+      "message": null,
+      "probes": [
+        {
+          "duration_ms": 58,
+          "http_status": 301,
+          "message": null,
+          "metrics": {
+            "size": 167,
+            "socks": 1,
+            "tls": 7,
+            "ttfb": 18
+          },
+          "output": "Testing proxy socks5://sq-client-udp-4f5062e350:1080 -> cloudflare.com:443\n\n[HTTP/2]   OK 301 (58ms) socks:1ms tls:7ms ttfb:18ms size:167B\n",
+          "over_stream": null,
+          "protocol": "http2",
+          "status": "pass"
+        },
+        {
+          "duration_ms": 21,
+          "http_status": 301,
+          "message": null,
+          "metrics": {
+            "size": 167,
+            "socks": 1,
+            "tls": 8,
+            "ttfb": 21
+          },
+          "output": "Testing proxy socks5://sq-client-udp-4f5062e350:1080 -> cloudflare.com:443\n\n[HTTP/3]   OK 301 (21ms) socks:1ms tls:8ms ttfb:21ms size:167B\n",
+          "over_stream": false,
+          "protocol": "http3",
+          "status": "pass"
+        },
+        {
+          "duration_ms": 15,
+          "http_status": 301,
+          "message": null,
+          "metrics": {
+            "size": 167,
+            "socks": 1,
+            "tls": 6,
+            "ttfb": 14
+          },
+          "output": "Testing proxy socks5://sq-client-over-stream-4f5062e350:1080 -> cloudflare.com:443\n\n[HTTP/3]   OK 301 (15ms) socks:1ms tls:6ms ttfb:14ms size:167B\n",
+          "over_stream": true,
+          "protocol": "http3",
+          "status": "pass"
+        }
+      ],
+      "server": "mihomo",
+      "status": "pass"
+    },
+    {
+      "client": "quicproxy",
+      "duration_ms": 0,
+      "log_dir": null,
+      "message": "Built locally from the latest GitHub release. ShadowQUIC is supported as an outbound only.",
+      "probes": [
+        {
+          "duration_ms": null,
+          "http_status": null,
+          "message": "Built locally from the latest GitHub release. ShadowQUIC is supported as an outbound only.",
+          "metrics": {},
+          "output": "",
+          "over_stream": null,
+          "protocol": "http2",
+          "status": "unsupported"
+        },
+        {
+          "duration_ms": null,
+          "http_status": null,
+          "message": "Built locally from the latest GitHub release. ShadowQUIC is supported as an outbound only.",
+          "metrics": {},
+          "output": "",
+          "over_stream": false,
+          "protocol": "http3",
+          "status": "unsupported"
+        },
+        {
+          "duration_ms": null,
+          "http_status": null,
+          "message": "Built locally from the latest GitHub release. ShadowQUIC is supported as an outbound only.",
+          "metrics": {},
+          "output": "",
+          "over_stream": true,
+          "protocol": "http3",
+          "status": "unsupported"
+        }
+      ],
+      "server": "clash-rs",
+      "status": "unsupported"
+    },
+    {
+      "client": "mihomo",
+      "duration_ms": 33617,
+      "log_dir": "work/mihomo_shadowquic/logs",
+      "message": null,
+      "probes": [
+        {
+          "duration_ms": 32,
+          "http_status": 301,
+          "message": null,
+          "metrics": {
+            "size": 167,
+            "socks": 1,
+            "tls": 12,
+            "ttfb": 32
+          },
+          "output": "Testing proxy socks5://sq-client-udp-3dbe0541d6:1080 -> cloudflare.com:443\n\n[HTTP/2]   OK 301 (32ms) socks:1ms tls:12ms ttfb:32ms size:167B\n",
+          "over_stream": null,
+          "protocol": "http2",
+          "status": "pass"
+        },
+        {
+          "duration_ms": 21,
+          "http_status": 301,
+          "message": null,
+          "metrics": {
+            "size": 167,
+            "socks": 1,
+            "tls": 7,
+            "ttfb": 21
+          },
+          "output": "Testing proxy socks5://sq-client-udp-3dbe0541d6:1080 -> cloudflare.com:443\n\n[HTTP/3]   OK 301 (21ms) socks:1ms tls:7ms ttfb:21ms size:167B\n",
+          "over_stream": false,
+          "protocol": "http3",
+          "status": "pass"
+        },
+        {
+          "duration_ms": null,
+          "http_status": null,
+          "message": "timeout",
+          "metrics": {},
+          "output": "Testing proxy socks5://sq-client-over-stream-3dbe0541d6:1080 -> cloudflare.com:443\n\n[HTTP/3]   FAILED: timeout\n",
+          "over_stream": true,
+          "protocol": "http3",
+          "status": "fail"
+        }
+      ],
+      "server": "shadowquic",
+      "status": "fail"
+    },
+    {
+      "client": "mihomo",
+      "duration_ms": 3658,
+      "log_dir": "work/mihomo_quicproxy/logs",
+      "message": null,
+      "probes": [
+        {
+          "duration_ms": 23,
+          "http_status": 301,
+          "message": null,
+          "metrics": {
+            "size": 167,
+            "socks": 1,
+            "tls": 14,
+            "ttfb": 23
+          },
+          "output": "Testing proxy socks5://sq-client-udp-cb1742fdf9:1080 -> cloudflare.com:443\n\n[HTTP/2]   OK 301 (23ms) socks:1ms tls:14ms ttfb:23ms size:167B\n",
+          "over_stream": null,
+          "protocol": "http2",
+          "status": "pass"
+        },
+        {
+          "duration_ms": 14,
+          "http_status": 301,
+          "message": null,
+          "metrics": {
+            "size": 167,
+            "socks": 1,
+            "tls": 6,
+            "ttfb": 14
+          },
+          "output": "Testing proxy socks5://sq-client-udp-cb1742fdf9:1080 -> cloudflare.com:443\n\n[HTTP/3]   OK 301 (14ms) socks:1ms tls:6ms ttfb:14ms size:167B\n",
+          "over_stream": false,
+          "protocol": "http3",
+          "status": "pass"
+        },
+        {
+          "duration_ms": 21,
+          "http_status": 301,
+          "message": null,
+          "metrics": {
+            "size": 167,
+            "socks": 1,
+            "tls": 9,
+            "ttfb": 21
+          },
+          "output": "Testing proxy socks5://sq-client-over-stream-cb1742fdf9:1080 -> cloudflare.com:443\n\n[HTTP/3]   OK 301 (21ms) socks:1ms tls:9ms ttfb:21ms size:167B\n",
+          "over_stream": true,
+          "protocol": "http3",
+          "status": "pass"
+        }
+      ],
+      "server": "quicproxy",
+      "status": "pass"
+    },
+    {
+      "client": "mihomo",
+      "duration_ms": 3640,
+      "log_dir": "work/mihomo_mihomo/logs",
+      "message": null,
+      "probes": [
+        {
+          "duration_ms": 22,
+          "http_status": 301,
+          "message": null,
+          "metrics": {
+            "size": 167,
+            "socks": 1,
+            "tls": 12,
+            "ttfb": 22
+          },
+          "output": "Testing proxy socks5://sq-client-udp-c3e9e3f92c:1080 -> cloudflare.com:443\n\n[HTTP/2]   OK 301 (22ms) socks:1ms tls:12ms ttfb:22ms size:167B\n",
+          "over_stream": null,
+          "protocol": "http2",
+          "status": "pass"
+        },
+        {
+          "duration_ms": 16,
+          "http_status": 301,
+          "message": null,
+          "metrics": {
+            "size": 167,
+            "socks": 1,
+            "tls": 6,
+            "ttfb": 16
+          },
+          "output": "Testing proxy socks5://sq-client-udp-c3e9e3f92c:1080 -> cloudflare.com:443\n\n[HTTP/3]   OK 301 (16ms) socks:1ms tls:6ms ttfb:16ms size:167B\n",
+          "over_stream": false,
+          "protocol": "http3",
+          "status": "pass"
+        },
+        {
+          "duration_ms": 19,
+          "http_status": 301,
+          "message": null,
+          "metrics": {
+            "size": 167,
+            "socks": 2,
+            "tls": 9,
+            "ttfb": 19
+          },
+          "output": "Testing proxy socks5://sq-client-over-stream-c3e9e3f92c:1080 -> cloudflare.com:443\n\n[HTTP/3]   OK 301 (19ms) socks:2ms tls:9ms ttfb:19ms size:167B\n",
+          "over_stream": true,
+          "protocol": "http3",
+          "status": "pass"
+        }
+      ],
+      "server": "mihomo",
+      "status": "pass"
+    },
+    {
+      "client": "mihomo",
+      "duration_ms": 0,
+      "log_dir": null,
+      "message": "Built locally from the latest GitHub release. ShadowQUIC is supported as an outbound only.",
+      "probes": [
+        {
+          "duration_ms": null,
+          "http_status": null,
+          "message": "Built locally from the latest GitHub release. ShadowQUIC is supported as an outbound only.",
+          "metrics": {},
+          "output": "",
+          "over_stream": null,
+          "protocol": "http2",
+          "status": "unsupported"
+        },
+        {
+          "duration_ms": null,
+          "http_status": null,
+          "message": "Built locally from the latest GitHub release. ShadowQUIC is supported as an outbound only.",
+          "metrics": {},
+          "output": "",
+          "over_stream": false,
+          "protocol": "http3",
+          "status": "unsupported"
+        },
+        {
+          "duration_ms": null,
+          "http_status": null,
+          "message": "Built locally from the latest GitHub release. ShadowQUIC is supported as an outbound only.",
+          "metrics": {},
+          "output": "",
+          "over_stream": true,
+          "protocol": "http3",
+          "status": "unsupported"
+        }
+      ],
+      "server": "clash-rs",
+      "status": "unsupported"
+    },
+    {
+      "client": "clash-rs",
+      "duration_ms": 3708,
+      "log_dir": "work/clash-rs_shadowquic/logs",
+      "message": null,
+      "probes": [
+        {
+          "duration_ms": 67,
+          "http_status": 301,
+          "message": null,
+          "metrics": {
+            "size": 167,
+            "socks": 1,
+            "tls": 57,
+            "ttfb": 67
+          },
+          "output": "Testing proxy socks5://sq-client-udp-6deffb1ffb:1080 -> cloudflare.com:443\n\n[HTTP/2]   OK 301 (67ms) socks:1ms tls:57ms ttfb:67ms size:167B\n",
+          "over_stream": null,
+          "protocol": "http2",
+          "status": "pass"
+        },
+        {
+          "duration_ms": 15,
+          "http_status": 301,
+          "message": null,
+          "metrics": {
+            "size": 167,
+            "socks": 1,
+            "tls": 6,
+            "ttfb": 15
+          },
+          "output": "Testing proxy socks5://sq-client-udp-6deffb1ffb:1080 -> cloudflare.com:443\n\n[HTTP/3]   OK 301 (15ms) socks:1ms tls:6ms ttfb:15ms size:167B\n",
+          "over_stream": false,
+          "protocol": "http3",
+          "status": "pass"
+        },
+        {
+          "duration_ms": 71,
+          "http_status": 301,
+          "message": null,
+          "metrics": {
+            "size": 167,
+            "socks": 1,
+            "tls": 61,
+            "ttfb": 71
+          },
+          "output": "Testing proxy socks5://sq-client-over-stream-6deffb1ffb:1080 -> cloudflare.com:443\n\n[HTTP/3]   OK 301 (71ms) socks:1ms tls:61ms ttfb:71ms size:167B\n",
+          "over_stream": true,
+          "protocol": "http3",
+          "status": "pass"
+        }
+      ],
+      "server": "shadowquic",
+      "status": "pass"
+    },
+    {
+      "client": "clash-rs",
+      "duration_ms": 3773,
+      "log_dir": "work/clash-rs_quicproxy/logs",
+      "message": null,
+      "probes": [
+        {
+          "duration_ms": 68,
+          "http_status": 301,
+          "message": null,
+          "metrics": {
+            "size": 167,
+            "socks": 1,
+            "tls": 58,
+            "ttfb": 67
+          },
+          "output": "Testing proxy socks5://sq-client-udp-24bc3aaa56:1080 -> cloudflare.com:443\n\n[HTTP/2]   OK 301 (68ms) socks:1ms tls:58ms ttfb:67ms size:167B\n",
+          "over_stream": null,
+          "protocol": "http2",
+          "status": "pass"
+        },
+        {
+          "duration_ms": 24,
+          "http_status": 301,
+          "message": null,
+          "metrics": {
+            "size": 167,
+            "socks": 1,
+            "tls": 12,
+            "ttfb": 24
+          },
+          "output": "Testing proxy socks5://sq-client-udp-24bc3aaa56:1080 -> cloudflare.com:443\n\n[HTTP/3]   OK 301 (24ms) socks:1ms tls:12ms ttfb:24ms size:167B\n",
+          "over_stream": false,
+          "protocol": "http3",
+          "status": "pass"
+        },
+        {
+          "duration_ms": 75,
+          "http_status": 301,
+          "message": null,
+          "metrics": {
+            "size": 167,
+            "socks": 1,
+            "tls": 65,
+            "ttfb": 75
+          },
+          "output": "Testing proxy socks5://sq-client-over-stream-24bc3aaa56:1080 -> cloudflare.com:443\n\n[HTTP/3]   OK 301 (75ms) socks:1ms tls:65ms ttfb:75ms size:167B\n",
+          "over_stream": true,
+          "protocol": "http3",
+          "status": "pass"
+        }
+      ],
+      "server": "quicproxy",
+      "status": "pass"
+    },
+    {
+      "client": "clash-rs",
+      "duration_ms": 63645,
+      "log_dir": "work/clash-rs_mihomo/logs",
+      "message": null,
+      "probes": [
+        {
+          "duration_ms": null,
+          "http_status": null,
+          "message": "TLS error: tls handshake eof",
+          "metrics": {},
+          "output": "Testing proxy socks5://sq-client-udp-f33550c133:1080 -> cloudflare.com:443\n\n[HTTP/2]   FAILED: TLS error: tls handshake eof\n",
+          "over_stream": null,
+          "protocol": "http2",
+          "status": "fail"
+        },
+        {
+          "duration_ms": null,
+          "http_status": null,
+          "message": "timeout",
+          "metrics": {},
+          "output": "Testing proxy socks5://sq-client-udp-f33550c133:1080 -> cloudflare.com:443\n\n[HTTP/3]   FAILED: timeout\n",
+          "over_stream": false,
+          "protocol": "http3",
+          "status": "fail"
+        },
+        {
+          "duration_ms": null,
+          "http_status": null,
+          "message": "timeout",
+          "metrics": {},
+          "output": "Testing proxy socks5://sq-client-over-stream-f33550c133:1080 -> cloudflare.com:443\n\n[HTTP/3]   FAILED: timeout\n",
+          "over_stream": true,
+          "protocol": "http3",
+          "status": "fail"
+        }
+      ],
+      "server": "mihomo",
+      "status": "fail"
+    },
+    {
+      "client": "clash-rs",
+      "duration_ms": 0,
+      "log_dir": null,
+      "message": "Built locally from the latest GitHub release. ShadowQUIC is supported as an outbound only.",
+      "probes": [
+        {
+          "duration_ms": null,
+          "http_status": null,
+          "message": "Built locally from the latest GitHub release. ShadowQUIC is supported as an outbound only.",
+          "metrics": {},
+          "output": "",
+          "over_stream": null,
+          "protocol": "http2",
+          "status": "unsupported"
+        },
+        {
+          "duration_ms": null,
+          "http_status": null,
+          "message": "Built locally from the latest GitHub release. ShadowQUIC is supported as an outbound only.",
+          "metrics": {},
+          "output": "",
+          "over_stream": false,
+          "protocol": "http3",
+          "status": "unsupported"
+        },
+        {
+          "duration_ms": null,
+          "http_status": null,
+          "message": "Built locally from the latest GitHub release. ShadowQUIC is supported as an outbound only.",
+          "metrics": {},
+          "output": "",
+          "over_stream": true,
+          "protocol": "http3",
+          "status": "unsupported"
+        }
+      ],
+      "server": "clash-rs",
+      "status": "unsupported"
+    }
+  ],
+  "run_id": "2026-09-14T20:22:17Z",
+  "runner_version": "0.1.0",
+  "schema_version": 2,
+  "started_at": "2026-09-14T20:22:17.331617Z",
+  "target": "https://cloudflare.com/"
+}

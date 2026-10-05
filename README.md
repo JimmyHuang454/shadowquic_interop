@@ -34,8 +34,9 @@ Each runnable client/server pair gets a private Docker bridge network:
    implementations carry UDP sessions in whatever mode the client requested,
    so no server-side UDP configuration is needed.
 2. The client starts with a generated configuration and a SOCKS5 listener.
-   HTTP probes use the default (datagram) client configuration.
-3. ProxyPen requests the public target over HTTP/2 and HTTP/3 through SOCKS5.
+   HTTP/2 uses the default (datagram) client configuration.
+3. ProxyPen requests the public target over HTTP/2, HTTP/3 over UDP, and
+   HTTP/3 over stream through SOCKS5 using separate client configurations.
 4. UDP probes exercise the SOCKS5 UDP ASSOCIATE path in two transport modes —
    `udp-over-stream` (UDP payloads on reliable QUIC streams) and
    `udp-over-datagram` (RFC 9221 QUIC datagrams). Because each client chooses
@@ -110,12 +111,13 @@ and `python3 -m shadowquic_interop run --help` for every option.
 ## Result data
 
 Every run creates `results/<UTC timestamp>.json` and refreshes
-`results/latest.json`. Schema version 1 includes:
+`results/latest.json`. Schema version 2 includes:
 
 - run timestamps, target, protocols, and runner version
 - endpoint source, image, and client/server capabilities
 - one result per matrix cell
-- one HTTP result per requested protocol, including ProxyPen metrics
+- one HTTP result per requested protocol and two results for HTTP/3 (UDP and
+  over-stream), including ProxyPen metrics
 - one UDP result per requested mode (`udp-over-stream`,
   `udp-over-datagram`) with byte and packet counts plus the throughput
   window and per-datagram latency; the report derives upload/download rates

@@ -48,6 +48,7 @@ class Status(StrEnum):
 class ProbeResult:
     protocol: Protocol
     status: Status
+    over_stream: bool | None = None
     http_status: int | None = None
     duration_ms: int | None = None
     metrics: dict[str, int] = field(default_factory=dict)
@@ -59,6 +60,7 @@ class ProbeResult:
         return cls(
             protocol=Protocol(value["protocol"]),
             status=Status(value["status"]),
+            over_stream=value.get("over_stream"),
             http_status=value.get("http_status"),
             duration_ms=value.get("duration_ms"),
             metrics=dict(value.get("metrics", {})),
@@ -110,7 +112,7 @@ class RunResult:
     protocols: list[Protocol]
     implementations: list[ImplementationRecord]
     results: list[CellResult]
-    schema_version: int = 1
+    schema_version: int = 2
     runner_version: str = "0.1.0"
 
     def to_dict(self) -> dict[str, Any]:
@@ -152,3 +154,13 @@ def aggregate_status(probes: list[ProbeResult]) -> Status:
         return Status.PASS
     return Status.FAIL
 
+
+def probe_variants(protocols: list[Protocol]) -> list[tuple[Protocol, bool | None]]:
+    """Expand HTTP/3 into its UDP and over-stream interoperability subtests."""
+    variants: list[tuple[Protocol, bool | None]] = []
+    for protocol in protocols:
+        if protocol == Protocol.HTTP3:
+            variants.extend(((protocol, False), (protocol, True)))
+        else:
+            variants.append((protocol, None))
+    return variants

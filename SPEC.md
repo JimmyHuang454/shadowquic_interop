@@ -4,12 +4,14 @@ This project is to test shadowquic protocol compatibility between differnt clien
 
 # Testing
 
-You should first writing a python script to test different client to connect different server. You can you github.com/sponogebob/proxypen to test http2 and http3 for a public server like cloudflare.com
+You should first writing a python script to test different client to connect different server. You can you github.com/sponogebob/proxypen to test http2 and http3 for a public server like cloudflare.com. For http3 test, you should test both over stream and over udp
+
 
 The clients include:
 - shadowquic
 - [quicproxy](https://github.com/RealBikiniBottom/QuicProxy/)
 - mihomo
+- [clash-rs](https://github.com/Watfaq/clash-rs)
 
 The server include:
 - shadowquic

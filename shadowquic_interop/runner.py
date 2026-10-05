@@ -14,6 +14,7 @@ from .models import (
     RunResult,
     Status,
     aggregate_status,
+    probe_variants,
 )
 
 
@@ -90,9 +91,10 @@ class InteropRunner:
                     ProbeResult(
                         protocol=protocol,
                         status=Status.UNSUPPORTED,
+                        over_stream=over_stream,
                         message=reasons[protocol],
                     )
-                    for protocol in protocols
+                    for protocol, over_stream in probe_variants(protocols)
                 ],
                 duration_ms=0,
                 message=message,
@@ -112,9 +114,10 @@ class InteropRunner:
             ProbeResult(
                 protocol=protocol,
                 status=Status.UNSUPPORTED,
+                over_stream=over_stream,
                 message=reasons[protocol],
             )
-            for protocol in protocols
+            for protocol, over_stream in probe_variants(protocols)
             if protocol not in runnable
         ]
         order = {protocol: index for index, protocol in enumerate(protocols)}
@@ -154,4 +157,3 @@ def write_result(result: RunResult, output_dir: Path) -> Path:
 
 def read_result(path: Path) -> RunResult:
     return RunResult.from_dict(json.loads(path.read_text(encoding="utf-8")))
-

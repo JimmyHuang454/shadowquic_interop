@@ -10,7 +10,14 @@ from pathlib import Path
 from typing import Sequence
 
 from .adapters import SOCKS_PORT, Implementation
-from .models import CellResult, ProbeResult, Protocol, Status, aggregate_status
+from .models import (
+    CellResult,
+    ProbeResult,
+    Protocol,
+    Status,
+    aggregate_status,
+    probe_variants,
+)
 
 
 PROXYPEN_IMAGE = "shadowquic-interop/proxypen:latest"
@@ -186,13 +193,17 @@ class DockerBackend:
         server_config.write_text(server.render_server(), encoding="utf-8")
         for role, mode in _client_roles(protocols):
             path = cell_dir / "client" / _config_name(client.config_name, role)
+            if role in {"default", "http3-stream"}:
+                mode_name = "udp" if role == "default" else "over-stream"
+                path = cell_dir / f"client-{mode_name}" / client.config_name
+                path.parent.mkdir(parents=True, exist_ok=True)
             path.write_text(
                 client.render_client(server_name, udp_mode=mode), encoding="utf-8"
             )
             client_configs[role] = path
 
         probes: list[ProbeResult] = []
-        message: str | None = None
+        errors: list[str] = []
         created_network = False
         containers: list[tuple[str, Path]] = []
         try:
@@ -225,57 +236,77 @@ class DockerBackend:
                 target_ip = self._container_ip(udp_target_name)
 
             client_containers: dict[str, str] = {}
+            role_errors: dict[str, str] = {}
             for role, _ in _client_roles(protocols):
-                if role == "default":
-                    name = client_name
-                else:
-                    name = f"{client_name}-{role}"
-                self._start_container(
-                    name, network, client, client_configs[role]
-                )
-                containers.append((name, log_dir / ("client.log" if role == "default" else f"client-{role}.log")))
+                name = client_name if role == "default" else f"{client_name}-{role}"
+                log_name = "client.log" if role == "default" else f"client-{role}.log"
+                containers.append((name, log_dir / log_name))
                 client_containers[role] = name
-                self._assert_running(name, f"{role} client")
+                try:
+                    self._start_container(name, network, client, client_configs[role])
+                    self._assert_running(name, f"{role} client")
+                except BackendError as exc:
+                    role_errors[role] = str(exc)
+                    errors.append(str(exc))
 
             time.sleep(self.readiness_delay)
-            for name, _ in containers:
-                self._assert_running(name, "container")
+            self._assert_running(server_name, "server")
+            if target_ip is not None:
+                self._assert_running(udp_target_name, "udp target")
+            for role, name in client_containers.items():
+                if role not in role_errors:
+                    try:
+                        self._assert_running(name, f"{role} client")
+                    except BackendError as exc:
+                        role_errors[role] = str(exc)
+                        errors.append(str(exc))
 
-            for protocol in protocols:
-                if protocol.is_udp:
-                    assert target_ip is not None
-                    probe = self._probe_udp(
-                        network,
-                        client_containers[protocol.udp_mode],
-                        target_ip,
-                        protocol,
-                    )
-                else:
-                    probe = self._probe(
-                        network, client_containers["default"], target, protocol
-                    )
-                if self.load_connections:
-                    load_metrics = self._probe_load(
-                        network=network,
-                        client_name=client_containers[
-                            protocol.udp_mode if protocol.is_udp else "default"
-                        ],
-                        server_name=server_name,
-                        target_ip=target_ip,
-                        target=target,
+            for protocol, over_stream in probe_variants(protocols):
+                role = (
+                    protocol.udp_mode if protocol.is_udp
+                    else "http3-stream" if over_stream else "default"
+                )
+                name = client_containers[role]
+                try:
+                    if role in role_errors:
+                        raise BackendError(role_errors[role])
+                    if protocol.is_udp:
+                        assert target_ip is not None
+                        probe = self._probe_udp(network, name, target_ip, protocol)
+                    else:
+                        probe = self._probe(
+                            network, name, target, protocol, over_stream=over_stream
+                        )
+                    if self.load_connections:
+                        probe.metrics.update(self._probe_load(
+                            network=network,
+                            client_name=name,
+                            server_name=server_name,
+                            target_ip=target_ip,
+                            target=target,
+                            protocol=protocol,
+                        ))
+                    probes.append(probe)
+                except BackendError as exc:
+                    errors.append(str(exc))
+                    probes.append(ProbeResult(
                         protocol=protocol,
-                    )
-                    merged = dict(probe.metrics)
-                    merged.update(load_metrics)
-                    probe.metrics = merged
-                probes.append(probe)
+                        status=Status.ERROR,
+                        over_stream=over_stream,
+                        message=str(exc),
+                    ))
         except BackendError as exc:
-            message = str(exc)
-            completed = {probe.protocol for probe in probes}
+            errors.append(str(exc))
+            completed = {(probe.protocol, probe.over_stream) for probe in probes}
             probes.extend(
-                ProbeResult(protocol=protocol, status=Status.ERROR, message=message)
-                for protocol in protocols
-                if protocol not in completed
+                ProbeResult(
+                    protocol=protocol,
+                    status=Status.ERROR,
+                    over_stream=over_stream,
+                    message=str(exc),
+                )
+                for protocol, over_stream in probe_variants(protocols)
+                if (protocol, over_stream) not in completed
             )
         finally:
             self._capture_logs(containers)
@@ -292,7 +323,7 @@ class DockerBackend:
             status=aggregate_status(probes),
             probes=probes,
             duration_ms=int((time.monotonic() - started) * 1000),
-            message=message,
+            message="; ".join(dict.fromkeys(errors)) or None,
             log_dir=str(log_dir),
         )
 
@@ -391,14 +422,25 @@ class DockerBackend:
             return None
 
     def _probe(
-        self, network: str, client_name: str, target: str, protocol: Protocol
+        self,
+        network: str,
+        client_name: str,
+        target: str,
+        protocol: Protocol,
+        *,
+        over_stream: bool | None,
     ) -> ProbeResult:
         result = self.commands.run(
             self._http_probe_args(network, client_name, target, protocol),
             timeout=self.timeout + 15,
             check=False,
         )
-        return parse_proxypen_output(protocol, result.output, result.returncode)
+        return parse_proxypen_output(
+            protocol,
+            result.output,
+            result.returncode,
+            over_stream=over_stream,
+        )
 
     def _http_probe_args(
         self, network: str, client_name: str, target: str, protocol: Protocol
@@ -663,13 +705,15 @@ def _latency_stats(values: list[int]) -> tuple[int, int, int, int] | None:
 def _client_roles(protocols: Sequence[Protocol]) -> list[tuple[str, str | None]]:
     """Map requested protocols to client config roles.
 
-    ``default`` serves the HTTP probes (UDP mode is irrelevant there), while
-    each UDP transport mode gets its own client container because the client
+    HTTP/3 uses separate datagram and stream clients. Each standalone UDP
+    transport mode also gets its own client container because the client
     decides at startup how to carry UDP sessions.
     """
     roles: list[tuple[str, str | None]] = []
     if any(protocol.is_http for protocol in protocols):
         roles.append(("default", None))
+    if Protocol.HTTP3 in protocols:
+        roles.append(("http3-stream", "stream"))
     for protocol in protocols:
         if protocol.is_udp and protocol.udp_mode not in {role for role, _ in roles}:
             roles.append((protocol.udp_mode, protocol.udp_mode))
@@ -696,7 +740,11 @@ _METRIC = re.compile(r"(?P<name>socks|tcp|tls|ttfb|size):(?P<value>\d+)(?:ms|B)"
 
 
 def parse_proxypen_output(
-    protocol: Protocol, output: str, returncode: int
+    protocol: Protocol,
+    output: str,
+    returncode: int,
+    *,
+    over_stream: bool | None = None,
 ) -> ProbeResult:
     success = _SUCCESS.search(output)
     if success:
@@ -707,6 +755,7 @@ def parse_proxypen_output(
         return ProbeResult(
             protocol=protocol,
             status=Status.PASS,
+            over_stream=over_stream,
             http_status=int(success.group("status")),
             duration_ms=int(success.group("duration")),
             metrics=metrics,
@@ -718,6 +767,7 @@ def parse_proxypen_output(
         return ProbeResult(
             protocol=protocol,
             status=Status.FAIL,
+            over_stream=over_stream,
             message=failure.group("message").strip(),
             output=output,
         )
@@ -726,6 +776,7 @@ def parse_proxypen_output(
     return ProbeResult(
         protocol=protocol,
         status=Status.ERROR,
+        over_stream=over_stream,
         message=f"unrecognized ProxyPen output: {detail}",
         output=output,
     )

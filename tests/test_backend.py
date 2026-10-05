@@ -1,3 +1,4 @@
+import json
 import tempfile
 import unittest
 from pathlib import Path
@@ -252,6 +253,47 @@ class LoadCellTests(unittest.TestCase):
         self.assertEqual(udp.metrics["window_ms"], 2000)
         self.assertEqual(udp.metrics["latency_min_ms"], 1)
 
+    def test_all_protocols_keep_http3_variants_and_pressure_metrics(self) -> None:
+        class AllProtocolsCommands(RecordingCommands):
+            def run(self, args, *, timeout, check=True):
+                result = super().run(args, timeout=timeout, check=check)
+                if PROXYPEN_IMAGE in args and "http3" in args:
+                    return CommandResult(
+                        list(args), 0, "[HTTP/3] OK 200 (30ms) ttfb:15ms\n", ""
+                    )
+                return result
+
+        commands = AllProtocolsCommands()
+        backend = DockerBackend(
+            command_runner=commands, readiness_delay=0, load_connections=2
+        )
+        implementation = IMPLEMENTATIONS["quicproxy"]
+        with tempfile.TemporaryDirectory() as directory:
+            result = backend.run_cell(
+                client=implementation,
+                server=implementation,
+                protocols=list(Protocol),
+                target="https://example.com/",
+                work_dir=Path(directory),
+            )
+        self.assertEqual(result.status, Status.PASS)
+        self.assertEqual(
+            [(probe.protocol, probe.over_stream) for probe in result.probes],
+            [(Protocol.HTTP2, None), (Protocol.HTTP3, False),
+             (Protocol.HTTP3, True), (Protocol.UDP_STREAM, None),
+             (Protocol.UDP_DATAGRAM, None)],
+        )
+        for probe in result.probes:
+            self.assertEqual(probe.metrics["load_ok"], 2)
+            self.assertEqual(probe.metrics["load_mem_client_max_kb"], 102400)
+        http3_runs = [
+            call for call in commands.calls
+            if PROXYPEN_IMAGE in call and "http3" in call
+        ]
+        proxies = [call[call.index("--proxy") + 1] for call in http3_runs]
+        self.assertEqual(len(set(proxies)), 2)
+        self.assertEqual(sum("http3-stream" in proxy for proxy in proxies), 3)
+
     def test_zero_load_connections_skips_pressure_phase(self) -> None:
         commands = RecordingCommands()
         backend = DockerBackend(command_runner=commands, readiness_delay=0)
@@ -283,7 +325,11 @@ class PartialCellTests(unittest.TestCase):
                         return CommandResult(
                             command, 0, "[HTTP/2] OK 200 (20ms) ttfb:10ms\n", ""
                         )
-                    raise BackendError("HTTP/3 probe timed out")
+                    if self.probe_count == 2:
+                        raise BackendError("HTTP/3 over UDP probe timed out")
+                    return CommandResult(
+                        command, 0, "[HTTP/3] OK 200 (30ms) ttfb:15ms\n", ""
+                    )
                 return CommandResult(command, 0, "", "")
 
         backend = DockerBackend(command_runner=FakeCommands(), readiness_delay=0)
@@ -297,8 +343,67 @@ class PartialCellTests(unittest.TestCase):
                 work_dir=Path(directory),
             )
         self.assertEqual(result.status, Status.ERROR)
-        self.assertEqual([item.status for item in result.probes], [Status.PASS, Status.ERROR])
-        self.assertEqual(result.probes[1].message, "HTTP/3 probe timed out")
+        self.assertEqual(
+            [item.status for item in result.probes],
+            [Status.PASS, Status.ERROR, Status.PASS],
+        )
+        self.assertEqual(
+            [item.over_stream for item in result.probes], [None, False, True]
+        )
+        self.assertEqual(
+            result.probes[1].message, "HTTP/3 over UDP probe timed out"
+        )
+
+    def test_http3_uses_separate_udp_and_over_stream_client_configs(self) -> None:
+        class RecordingCommands:
+            def __init__(self) -> None:
+                self.calls = []
+
+            def run(self, args, *, timeout, check=True):
+                command = list(args)
+                self.calls.append(command)
+                if command[:2] == ["docker", "inspect"]:
+                    return CommandResult(command, 0, "true\n", "")
+                if PROXYPEN_IMAGE in command:
+                    return CommandResult(
+                        command, 0, "[HTTP/3] OK 200 (30ms) ttfb:15ms\n", ""
+                    )
+                return CommandResult(command, 0, "", "")
+
+        commands = RecordingCommands()
+        backend = DockerBackend(command_runner=commands, readiness_delay=0)
+        implementation = IMPLEMENTATIONS["quicproxy"]
+        with tempfile.TemporaryDirectory() as directory:
+            work_dir = Path(directory)
+            result = backend.run_cell(
+                client=implementation,
+                server=implementation,
+                protocols=[Protocol.HTTP3],
+                target="https://example.com/",
+                work_dir=work_dir,
+            )
+            udp_config = json.loads(
+                (work_dir / "quicproxy_quicproxy/client-udp/config.json").read_text()
+            )
+            stream_config = json.loads(
+                (
+                    work_dir
+                    / "quicproxy_quicproxy/client-over-stream/config.json"
+                ).read_text()
+            )
+
+        self.assertEqual(result.status, Status.PASS)
+        self.assertEqual([item.over_stream for item in result.probes], [False, True])
+        self.assertEqual(
+            udp_config["outbounds"]["servers"]["shadowquic"]["udp_mod"],
+            "datagram",
+        )
+        self.assertEqual(
+            stream_config["outbounds"]["servers"]["shadowquic"]["udp_mod"],
+            "stream",
+        )
+        proxy_runs = [call for call in commands.calls if PROXYPEN_IMAGE in call]
+        self.assertEqual(len(proxy_runs), 2)
 
 
 class PrepareTests(unittest.TestCase):

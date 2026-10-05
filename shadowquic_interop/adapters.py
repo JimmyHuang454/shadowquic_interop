@@ -54,15 +54,19 @@ class Implementation:
             return _mihomo_server()
         raise ValueError(f"{self.name} has no ShadowQUIC server adapter")
 
-    def render_client(self, server_host: str, *, udp_mode: str | None = None) -> str:
+    def render_client(
+        self, server_host: str, *, udp_mode: str | None = None,
+        over_stream: bool = False,
+    ) -> str:
         """Render the client config for ``udp_mode``.
 
         ``udp_mode`` selects how UDP sessions are carried over the QUIC
         tunnel: ``"stream"`` (reliable QUIC streams) or ``"datagram"``
         (RFC 9221 QUIC datagrams, the default). Servers support both modes
         without configuration, so the mode is a purely client-side choice.
+        ``over_stream`` selects the mode when ``udp_mode`` is omitted.
         """
-        mode = udp_mode or "datagram"
+        mode = udp_mode or ("stream" if over_stream else "datagram")
         if mode not in self.udp_modes:
             raise ValueError(
                 f"{self.name} client does not support UDP-over-{mode} mode"

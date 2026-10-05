@@ -17,16 +17,24 @@ class AdapterTests(unittest.TestCase):
         implementation = IMPLEMENTATIONS["shadowquic"]
         server = implementation.render_server()
         client = implementation.render_client("server-under-test")
+        stream_client = implementation.render_client(
+            "server-under-test", over_stream=True
+        )
         self.assertIn(f'bind-addr: "0.0.0.0:{SERVER_PORT}"', server)
         self.assertIn(f'username: "{USERNAME}"', server)
         self.assertIn(f'password: "{PASSWORD}"', server)
         self.assertIn(f'bind-addr: "0.0.0.0:{SOCKS_PORT}"', client)
         self.assertIn(f'addr: "server-under-test:{SERVER_PORT}"', client)
+        self.assertIn("over-stream: false", client)
+        self.assertIn("over-stream: true", stream_client)
 
     def test_quicproxy_configs_are_valid_json(self) -> None:
         implementation = IMPLEMENTATIONS["quicproxy"]
         server = json.loads(implementation.render_server())
         client = json.loads(implementation.render_client("sq-server"))
+        stream_client = json.loads(
+            implementation.render_client("sq-server", over_stream=True)
+        )
         self.assertEqual(server["inbounds"]["shadowquic"]["port"], SERVER_PORT)
         self.assertEqual(client["inbounds"]["socks"]["port"], SOCKS_PORT)
         self.assertEqual(
@@ -46,6 +54,13 @@ class AdapterTests(unittest.TestCase):
             client["outbounds"]["servers"]["shadowquic"]["tls"]["jls_password"],
             PASSWORD,
         )
+        self.assertEqual(
+            client["outbounds"]["servers"]["shadowquic"]["udp_mod"], "datagram"
+        )
+        self.assertEqual(
+            stream_client["outbounds"]["servers"]["shadowquic"]["udp_mod"],
+            "stream",
+        )
 
     def test_mihomo_meta_configs_enable_client_and_server(self) -> None:
         implementation = IMPLEMENTATIONS["mihomo"]
@@ -55,12 +70,17 @@ class AdapterTests(unittest.TestCase):
         self.assertEqual(implementation.command(), ["-f", "/config/config.yaml"])
         server = implementation.render_server()
         client = implementation.render_client("mihomo-server")
+        stream_client = implementation.render_client(
+            "mihomo-server", over_stream=True
+        )
         self.assertIn("type: shadowquic", server)
         self.assertIn(f"port: {SERVER_PORT}", server)
         self.assertIn("- MATCH,DIRECT", server)
         self.assertIn(f"socks-port: {SOCKS_PORT}", client)
         self.assertIn('server: "mihomo-server"', client)
         self.assertIn("- MATCH,shadowquic-interop", client)
+        self.assertIn("udp-over-stream: false", client)
+        self.assertIn("udp-over-stream: true", stream_client)
 
     def test_clash_rs_config_enables_client_only(self) -> None:
         implementation = IMPLEMENTATIONS["clash-rs"]
@@ -73,6 +93,9 @@ class AdapterTests(unittest.TestCase):
             implementation.render_server()
 
         client = implementation.render_client("clash-rs-server")
+        stream_client = implementation.render_client(
+            "clash-rs-server", over_stream=True
+        )
         self.assertIn(
             "type: socks\n"
             "    listen: 0.0.0.0\n"
@@ -90,6 +113,8 @@ class AdapterTests(unittest.TestCase):
         self.assertIn("server-name: \"cloudflare.com\"", client)
         self.assertIn("- 127.0.0.11", client)
         self.assertIn("- MATCH,shadowquic-interop", client)
+        self.assertIn("over-stream: false", client)
+        self.assertIn("over-stream: true", stream_client)
 
     def test_selection_rejects_unknown_keys(self) -> None:
         with self.assertRaisesRegex(ValueError, "unknown implementations"):

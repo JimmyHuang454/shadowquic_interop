@@ -128,7 +128,7 @@
       ? cell.probes
       : cell.probes.filter((probe) => probe.protocol === protocol);
     const probeSummary = visibleProbes
-      .map((probe) => `${probeLabel(probe.protocol)} ${statusView[probe.status]?.label || probe.status}`)
+      .map((probe) => `${probeLabel(probe)} ${statusView[probe.status]?.label || probe.status}`)
       .join(", ");
     const button = document.createElement("button");
     button.type = "button";
@@ -153,7 +153,7 @@
     for (const probe of visibleProbes) {
       const badge = document.createElement("span");
       badge.className = `probe-badge ${probe.status}`;
-      badge.textContent = probeLabel(probe.protocol);
+      badge.textContent = probeLabel(probe);
       badges.append(badge);
     }
     button.append(symbol, label, badges);
@@ -339,7 +339,7 @@
     const title = document.createElement("div");
     title.className = "probe-title";
     const name = document.createElement("strong");
-    name.textContent = protocolNames[probe.protocol] || probe.protocol;
+    name.textContent = probeName(probe);
     const status = document.createElement("span");
     status.className = `status-text ${probe.status}`;
     status.textContent = statusView[probe.status]?.label || probe.status;
@@ -438,11 +438,28 @@
 
   function statusFor(cell, protocol) {
     if (protocol === "all") return cell.status;
-    return cell.probes.find((probe) => probe.protocol === protocol)?.status || "error";
+    const statuses = cell.probes
+      .filter((probe) => probe.protocol === protocol)
+      .map((probe) => probe.status);
+    if (!statuses.length || statuses.includes("error")) return "error";
+    if (statuses.includes("fail")) return "fail";
+    if (statuses.every((status) => status === "unsupported")) return "unsupported";
+    if (statuses.every((status) => status === "pass")) return "pass";
+    return "fail";
   }
 
-  function probeLabel(protocol) {
-    return protocolBadges[protocol] || protocol;
+  function probeLabel(probe) {
+    if (probe.protocol !== "http3") return protocolBadges[probe.protocol] || probe.protocol;
+    if (probe.over_stream === true) return "H3 stream";
+    if (probe.over_stream === false) return "H3 UDP";
+    return "H3";
+  }
+
+  function probeName(probe) {
+    if (probe.protocol !== "http3") return protocolNames[probe.protocol] || probe.protocol;
+    if (probe.over_stream === true) return "HTTP/3 over stream";
+    if (probe.over_stream === false) return "HTTP/3 over UDP";
+    return "HTTP/3";
   }
 
   function updateLocation(runId, protocol) {

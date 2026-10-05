@@ -78,7 +78,21 @@ class RunnerTests(unittest.TestCase):
             self.assertEqual(loaded.results[0].probes[0].protocol, Protocol.HTTP2)
             self.assertEqual(loaded.results[0].probes[1].protocol, Protocol.UDP_DATAGRAM)
             latest = json.loads((Path(directory) / "latest.json").read_text())
-            self.assertEqual(latest["schema_version"], 1)
+            self.assertEqual(latest["schema_version"], 2)
+
+    def test_unsupported_http3_cell_contains_both_subtests(self) -> None:
+        backend = FakeBackend()
+        result = InteropRunner(backend).run(
+            clients=[IMPLEMENTATIONS["shadowquic"]],
+            servers=[IMPLEMENTATIONS["clash-rs"]],
+            protocols=[Protocol.HTTP3],
+            target="https://example.com/",
+            work_dir=Path("work"),
+        )
+        self.assertEqual(
+            [probe.over_stream for probe in result.results[0].probes],
+            [False, True],
+        )
 
     def test_missing_udp_mode_only_marks_that_probe_unsupported(self) -> None:
         from dataclasses import replace
